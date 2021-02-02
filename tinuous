@@ -26,7 +26,7 @@ from github.WorkflowRun import WorkflowRun
 import requests
 from yaml import safe_load
 
-log = logging.getLogger("download-logs")
+log = logging.getLogger("tinuous")
 
 
 class EventType(Enum):

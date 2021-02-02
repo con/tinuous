@@ -6,11 +6,11 @@ Usage
 
 ::
 
-    python3 download-logs.py [<options>]
+    ./tinuous [<options>]
 
-``download-logs.py`` reads a configuration file telling it what repository to
-retrieve logs for, where to retrieve them from, and where to save them, and
-then it carries those steps out.
+``tinuous`` reads a configuration file telling it what repository to retrieve
+logs for, where to retrieve them from, and where to save them, and then it
+carries those steps out.
 
 
 Options
