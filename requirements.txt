@@ -1,0 +1,8 @@
+# Python ~= 3.8
+cfgv ~= 3.0
+click ~= 7.0
+click-loglevel ~= 0.2
+PyGithub ~= 1.53
+python-dateutil ~= 2.7
+PyYAML ~= 5.0
+requests ~= 2.20

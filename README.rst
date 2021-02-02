@@ -1,0 +1,191 @@
+This script downloads build logs for a GitHub repository from GitHub Actions
+and/or Travis-CI.com.  It requires Python 3.8 or later.
+
+Usage
+=====
+
+::
+
+    python3 download-logs.py [<options>]
+
+``download-logs.py`` reads a configuration file telling it what repository to
+retrieve logs for, where to retrieve them from, and where to save them, and
+then it carries those steps out.
+
+
+Options
+-------
+
+-c FILE, --config FILE          Read configuration from the given file [default
+                                value: ``config.yml``]
+
+-l LEVEL, --log-level LEVEL     Set the log level to the given value.  Possible
+                                values are "``CRITICAL``", "``ERROR``",
+                                "``WARNING``", "``INFO``", "``DEBUG``" (all
+                                case-insensitive) and their Python integer
+                                equivalents.  [default value: INFO]
+
+-S FILE, --state FILE           Store program state (e.g., timestamps before
+                                which all logs are known to have been fetched)
+                                in the given file [default value:
+                                ``.dlstate.json``]
+
+
+Configuration
+-------------
+
+The configuration file is a YAML file containing a mapping with the following
+keys:
+
+``repo``
+    The GitHub repository to retrieve logs for, in the form ``OWNER/NAME``
+
+``ci``
+    A mapping from the names of the CI systems from which to retrieve logs to
+    sub-mappings containing CI-specific configuration.  Including a given CI
+    system is optional; logs will be fetched from a given system if & only if
+    it is listed in this mapping.
+
+    The CI systems and their sub-mappings are as follows:
+
+    ``github``
+        Configuration for retrieving logs from GitHub Actions.  Subfields:
+
+        ``path``
+            A template string that will be instantiated for each workflow run
+            to produce the path for the directory (relative to the current
+            working directory) under which the run's build logs will be saved.
+            See "`Path Templates`_" for more information.
+
+        ``workflows``
+            A list of the filenames for the workflows for which to retrieve
+            logs.  The filenames should only consist of the workflow basenames,
+            including the file extension (e.g., ``test.yml``, not
+            ``.github/workflows/test.yml``).
+
+    ``travis``
+        Configuration for retrieving logs from Travis-CI.com.  Subfield:
+
+        ``path``
+            A template string that will be instantiated for each job of each
+            build to produce the path for the file (relative to the current
+            working directory) in which the job's logs will be saved.  See
+            "`Path Templates`_" for more information.
+
+``since``
+    A timestamp (date, time, & timezone); only logs for builds started after
+    the given point in time will be retrieved
+
+    As the script retrieves new build logs, it keeps track of their starting
+    points.  Once the logs for all builds for the given CI system &
+    configuration have been fetched up to a certain point, the timestamp for
+    the latest such build is stored in the state file and used as the new
+    ``since`` value for the respective CI system on subsequent runs.
+
+``types``
+    A list of build trigger event types; only logs for builds triggered by one
+    of the given events will be retrieved
+
+    The recognized event types are:
+
+    ``cron``
+        A build run on a schedule
+
+    ``pr``
+        A build in response to activity on a pull request
+
+    ``push``
+        A build in response to new commits
+
+All fields are required unless stated otherwise.
+
+A sample config file:
+
+.. code:: yaml
+
+    repo: datalad/datalad
+    ci:
+      github:
+        path: '{year}/{month}/{day}/{ci}/{type}/{type_id}/{commit}/{wf_name}/{number}/'
+        workflows:
+          - test_crippled.yml
+          - test_extensions.yml
+          - test_macos.yml
+      travis:
+        path: '{year}/{month}/{day}/{ci}/{type}/{type_id}/{commit}/{number}/{job}.txt'
+    since: 2021-01-20T00:00:00Z
+    types: [cron, pr, push]
+
+
+Path Templates
+--------------
+
+The path at which logs for a given workflow run or build job are saved is
+determined by instantiating the path template string given in the configuration
+file for the corresponding CI system.  A template string is a filepath
+containing placeholders of the form ``{field}``, where the available
+placeholders are:
+
+==============  ===============================================================
+Placeholder     Definition
+==============  ===============================================================
+``{year}``      The four-digit year in which the build was started
+``{month}``     The two-digit month in which the build was started
+``{day}``       The two-digit day in which the build was started
+``{hour}``      The two-digit hour at which the build was started
+``{minute}``    The two-digit minute at which the build was started
+``{second}``    The two-digit second at which the build was started
+``{ci}``        The name of the CI system (``github`` or ``travis``)
+``{type}``      The event type that triggered the build (``cron``, ``pr``, or
+                ``push``)
+``{type_id}``   Further information on the triggering event; for ``cron``, this
+                is a timestamp for the start of the build; for ``pr``, this is
+                the number of the associated pull request, or ``UNK`` if it
+                cannot be determined; for ``push``, this is the name of the
+                branch to which the push was made
+``{commit}``    The hash of the commit the build ran against
+``{number}``    The run number of the workflow run (GitHub) or the build number
+                (Travis)
+``{wf_name}``   *(GitHub only)* The name of the workflow
+``{wf_file}``   *(GitHub only)* The basename of the workflow file (including
+                the file extension)
+``{run_id}``    *(GitHub only)* The unique ID of the workflow run
+``{job}``       *(Travis only)* The number of the job (without the build number
+                prefix)
+==============  ===============================================================
+
+All timestamps and timestamp components are in UTC.
+
+Authentication
+--------------
+
+GitHub
+~~~~~~
+
+In order to retrieve logs from GitHub, a GitHub OAuth token must be specified
+either via the ``GITHUB_TOKEN`` environment variable or as the value of the
+``hub.oauthtoken`` Git config option.
+
+Travis
+~~~~~~
+
+In order to retrieve logs from Travis, a Travis API access token must be either
+specified via the ``TRAVIS_TOKEN`` environment variable or be retrievable by
+running ``travis token --com --no-interactive``.
+
+A Travis API access token can be acquired as follows:
+
+- Install the `Travis command line client
+  <https://github.com/travis-ci/travis.rb>`_.
+
+- Run ``travis login --com`` to authenticate.
+
+  - If your Travis account is linked to your GitHub account, you can
+    authenticate by running ``travis login --com --github-token
+    $GITHUB_TOKEN``.
+
+- If the script will be run on the same machine that the above steps are
+  carried out on, you can stop here, and the script will retrieve the token
+  directly from the ``travis`` command.
+
+- Run ``travis token --com`` to retrieve the API access token.
