@@ -235,15 +235,25 @@ class Travis(CISystem):
     def get_auth_token() -> str:
         token = os.environ.get("TRAVIS_TOKEN")
         if not token:
-            r = subprocess.run(
-                ["travis", "token", "--com", "--no-interactive"],
-                stdout=subprocess.PIPE,
-                universal_newlines=True,
-            )
+            try:
+                r = subprocess.run(
+                    ["travis", "token", "--com", "--no-interactive"],
+                    stdout=subprocess.PIPE,
+                    universal_newlines=True,
+                )
+            except FileNotFoundError:
+                raise RuntimeError(
+                    "Travis token not set.  Set via TRAVIS_TOKEN environment"
+                    " variable or log in with `travis` client.  See"
+                    " <https://github.com/con/tinuous#travis> for more"
+                    " information."
+                )
             if r.returncode != 0 or not r.stdout.strip():
                 raise RuntimeError(
                     "Travis token not set.  Set via TRAVIS_TOKEN environment"
-                    " variable or log in with `travis` client."
+                    " variable or log in with `travis` client.  See"
+                    " <https://github.com/con/tinuous#travis> for more"
+                    " information."
                 )
             token = r.stdout.strip()
         return token
