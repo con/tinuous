@@ -1,0 +1,9 @@
+language: python
+cache: pip
+python:
+    - '3.8'
+    - '3.9'
+install:
+    - pip install -r requirements.txt
+script:
+    - python tinuous --help
