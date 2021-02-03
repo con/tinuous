@@ -439,8 +439,11 @@ class Appveyor(CISystem):
                 f"/api/projects/{self.accountName}/{self.repo_slug}/history",
                 params=params,
             ).json()
-            yield from data["builds"]
-            params["startBuildId"] = data["builds"][-1]["buildId"]
+            if data.get("builds"):
+                yield from data["builds"]
+                params["startBuildId"] = data["builds"][-1]["buildId"]
+            else:
+                break
 
     def get_build_logs(
         self, event_types: List[EventType]
