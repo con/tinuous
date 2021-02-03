@@ -1,0 +1,15 @@
+image: Ubuntu
+
+environment:
+  matrix:
+    - PYTHON: '3.8'
+    - PYTHON: '3.9'
+
+build: off
+
+install:
+  - $HOME/venv$PY/bin/python -m pip install --upgrade pip wheel
+  - $HOME/venv$PY/bin/python -m pip install -r requirements.txt
+
+test_script:
+  - $HOME/venv$PY/bin/python tinuous --help
