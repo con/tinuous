@@ -217,6 +217,15 @@ class GHABuildLog(BuildLog):
     def download(self, path_template: str) -> None:
         p = Path(path_template.format_map(self.path_fields()))
         p.mkdir(parents=True, exist_ok=True)
+        if any(p.iterdir()):
+            log.info(
+                "Logs for %s (%s) #%s already downloaded to %s; skipping",
+                self.workflow_file,
+                self.workflow_name,
+                self.number,
+                p,
+            )
+            return
         log.info(
             "Downloading logs for %s (%s) #%s to %s",
             self.workflow_file,
@@ -348,6 +357,14 @@ class TravisJobLog(BuildLog):
 
     def download(self, path_template: str) -> None:
         p = Path(path_template.format_map(self.path_fields()))
+        if p.exists():
+            log.info(
+                "Logs for job %s.%s already downloaded to %s; skipping",
+                self.number,
+                self.job,
+                p,
+            )
+            return
         p.parent.mkdir(parents=True, exist_ok=True)
         log.info(
             "Downloading logs for job %s.%s to %s",
