@@ -138,6 +138,7 @@ class GitHubActions(CISystem):
                     else:
                         log.info("Event type is %r; skipping", run.event)
 
+
 @dataclass
 class BuildLog(ABC):
     created_at: datetime
@@ -211,12 +212,14 @@ class GHABuildLog(BuildLog):
 
     def path_fields(self) -> Dict[str, str]:
         fields = super().path_fields()
-        fields.update({
-            "ci": "github",
-            "wf_name": re.sub(r'[\x5C/<>:|"?*]', "_", self.workflow_name),
-            "wf_file": self.workflow_file,
-            "run_id": str(self.run_id),
-        })
+        fields.update(
+            {
+                "ci": "github",
+                "wf_name": re.sub(r'[\x5C/<>:|"?*]', "_", self.workflow_name),
+                "wf_file": self.workflow_file,
+                "run_id": str(self.run_id),
+            }
+        )
         return fields
 
     def download(self, path_template: str) -> None:
@@ -279,13 +282,13 @@ class Travis(CISystem):
         s.headers["Authorization"] = f"token {self.token}"
         return s
 
-    def get(self, path, **kwargs):
+    def get(self, path, **kwargs) -> requests.Response:
         url = "https://api.travis-ci.com/" + path.lstrip("/")
         r = self.session.get(url, **kwargs)
         r.raise_for_status()
         return r
 
-    def paginate(self, path, params=None):
+    def paginate(self, path, params=None) -> Iterator[dict]:
         while True:
             data = self.get(path, params=params).json()
             yield from data[data["@type"]]
@@ -364,10 +367,12 @@ class TravisJobLog(BuildLog):
 
     def path_fields(self) -> Dict[str, str]:
         fields = super().path_fields()
-        fields.update({
-            "ci": "travis",
-            "job": self.job,
-        })
+        fields.update(
+            {
+                "ci": "travis",
+                "job": self.job,
+            }
+        )
         return fields
 
     def download(self, path_template: str) -> None:
@@ -393,9 +398,144 @@ class TravisJobLog(BuildLog):
                 fp.write(chunk)
 
 
+@dataclass
+class Appveyor(CISystem):
+    accountName: str
+    projectSlug: Optional[str]
+
+    @staticmethod
+    def get_auth_token() -> str:
+        token = os.environ.get("APPVEYOR_TOKEN")
+        if not token:
+            raise RuntimeError(
+                "Appveyor API key not set.  Set via APPVEYOR_TOKEN environment"
+                " variable."
+            )
+        return token
+
+    @property
+    def repo_slug(self) -> str:
+        if self.projectSlug is None:
+            return self.repo.split("/")[1]
+        else:
+            return self.projectSlug
+
+    @cached_property
+    def session(self) -> requests.Session:
+        s = requests.Session()
+        s.headers["Authorization"] = f"Bearer {self.token}"
+        return s
+
+    def get(self, path, **kwargs) -> requests.Response:
+        url = "https://ci.appveyor.com/" + path.lstrip("/")
+        r = self.session.get(url, **kwargs)
+        r.raise_for_status()
+        return r
+
+    def get_builds(self) -> Iterator[dict]:
+        params = {"recordsNumber": 20}
+        while True:
+            data = self.get(
+                f"/api/projects/{self.accountName}/{self.repo_slug}/history",
+                params=params,
+            ).json()
+            yield from data["builds"]
+            params["startBuildId"] = data["builds"][-1]["buildId"]
+
+    def get_build_logs(
+        self, event_types: List[EventType]
+    ) -> Iterator["AppveyorJobLog"]:
+        log.info("Fetching runs newer than %s", self.since)
+        for build in self.get_builds():
+            if build.get("pullRequestId"):
+                run_event = EventType.PULL_REQUEST
+            else:
+                run_event = EventType.PUSH
+            ts = isoparse(build["created"])
+            if ts <= self.since:
+                break
+            elif build.get("finished") is None:
+                log.info("Build %s not completed; skipping", build["buildNumber"])
+                self.register_build(ts, False)
+            else:
+                log.info("Found build %s", build["buildNumber"])
+                self.register_build(ts, True)
+                if run_event in event_types:
+                    for job in self.get(
+                        f"/api/projects/{self.accountName}/{self.repo_slug}"
+                        f"/build/{build['version']}"
+                    ).json()["build"]["jobs"]:
+                        yield AppveyorJobLog.from_job(self, build, job)
+                else:
+                    log.info("Event type is %r; skipping", run_event.value)
+
+
+@dataclass
+class AppveyorJobLog(BuildLog):
+    client: Appveyor
+    job: str
+
+    @classmethod
+    def from_job(
+        cls,
+        client: Appveyor,
+        build: Dict[str, Any],
+        job: Dict[str, Any],
+    ) -> "AppveyorJobLog":
+        created_at = isoparse(build["created"])
+        if build.get("pullRequestId"):
+            event = EventType.PULL_REQUEST
+            event_id = build["pullRequestId"]
+        else:
+            event = EventType.PUSH
+            event_id = build["branch"]
+        return cls(
+            client=client,
+            created_at=created_at,
+            event_type=event,
+            event_id=event_id,
+            commit=build["commitId"],
+            number=build["buildNumber"],
+            job=job["jobId"],
+        )
+
+    def path_fields(self) -> Dict[str, str]:
+        fields = super().path_fields()
+        fields.update(
+            {
+                "ci": "appveyor",
+                "job": self.job,
+            }
+        )
+        return fields
+
+    def download(self, path_template: str) -> None:
+        p = Path(path_template.format_map(self.path_fields()))
+        if p.exists():
+            log.info(
+                "Logs for build %s, job %s already downloaded to %s; skipping",
+                self.number,
+                self.job,
+                p,
+            )
+            return
+        p.parent.mkdir(parents=True, exist_ok=True)
+        log.info(
+            "Downloading logs for build %s, job %s to %s",
+            self.number,
+            self.job,
+            p,
+        )
+        r = self.client.get(f"/api/buildjobs/{self.job}/log", stream=True)
+        with p.open("wb") as fp:
+            for chunk in r.iter_content(chunk_size=8192):
+                fp.write(chunk)
+
+
 CI_SYSTEMS: Dict[str, Type[CISystem]] = {
     "github": GitHubActions,
     "travis": Travis,
+    "appveyor": Appveyor,
 }
 
 
@@ -438,6 +578,18 @@ CONFIG_SCHEMA = cfgv.Map(
                 ),
                 {},
             ),
+            cfgv.OptionalRecurse(
+                "appveyor",
+                cfgv.Map(
+                    "ci.appveyor",
+                    None,
+                    cfgv.NoAdditionalKeys(["path", "accountName", "projectSlug"]),
+                    cfgv.Required("path", cfgv.check_string),
+                    cfgv.Required("accountName", cfgv.check_string),
+                    cfgv.Optional("projectSlug", cfgv.check_string, None),
+                ),
+                {},
+            ),
         ),
     ),
     cfgv.Required("since", cfgv.check_type(datetime)),
@@ -460,8 +612,9 @@ CONFIG_SCHEMA = cfgv.Map(
     "-l",
     "--log-level",
     type=LogLevel(),
-    default=logging.INFO,
-    help="Set logging level [default: INFO]",
+    default="INFO",
+    help="Set logging level",
+    show_default=True,
 )
 @click.option(
     "-S",
@@ -520,9 +673,11 @@ def ensure_aware(dt: datetime) -> datetime:
     # that's fixed, we need to make such datetimes timezone-aware manually.
     return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
 
+
 def removeprefix(s: str, prefix: str) -> str:
     n = len(prefix)
     return s[n:] if s[:n] == prefix else s
+
 
 if __name__ == "__main__":
     main()

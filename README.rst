@@ -1,5 +1,5 @@
-This script downloads build logs for a GitHub repository from GitHub Actions
-and/or Travis-CI.com.  It requires Python 3.8 or later.
+This script downloads build logs for a GitHub repository from GitHub Actions,
+Travis-CI.com, and/or Appveyor.  It requires Python 3.8 or later.
 
 Usage
 =====
@@ -72,6 +72,24 @@ keys:
             working directory) in which the job's logs will be saved.  See
             "`Path Templates`_" for more information.
 
+    ``appveyor``
+        Configuration for retrieving logs from Appveyor.  Subfields:
+
+        ``path``
+            A template string that will be instantiated for each job of each
+            build to produce the path for the file (relative to the current
+            working directory) in which the job's logs will be saved.  See
+            "`Path Templates`_" for more information.
+
+        ``accountName``
+            The name of the Appveyor account to which the repository belongs on
+            Appveyor
+
+        ``projectSlug``
+            *(optional)* The project slug for the repository on Appveyor; if
+            not specified, it is assumed that the slug is the same as the
+            repository name
+
 ``since``
     A timestamp (date, time, & timezone); only logs for builds started after
     the given point in time will be retrieved
@@ -113,6 +131,10 @@ A sample config file:
           - test_macos.yml
       travis:
         path: '{year}/{month}/{day}/{ci}/{type}/{type_id}/{commit}/{number}/{job}.txt'
+      appveyor:
+        path: '{year}/{month}/{day}/{ci}/{type}/{type_id}/{commit}/{number}/{job}.txt'
+        accountName: mih
+        projectSlug: datalad
     since: 2021-01-20T00:00:00Z
     types: [cron, pr, push]
 
@@ -142,16 +164,17 @@ Placeholder     Definition
                 is a timestamp for the start of the build; for ``pr``, this is
                 the number of the associated pull request, or ``UNK`` if it
                 cannot be determined; for ``push``, this is the name of the
-                branch to which the push was made
+                branch to which the push was made (or possibly the tag that was
+                pushed, if using Appveyor)
 ``{commit}``    The hash of the commit the build ran against
 ``{number}``    The run number of the workflow run (GitHub) or the build number
-                (Travis)
+                (Travis and Appveyor)
 ``{wf_name}``   *(GitHub only)* The name of the workflow
 ``{wf_file}``   *(GitHub only)* The basename of the workflow file (including
                 the file extension)
 ``{run_id}``    *(GitHub only)* The unique ID of the workflow run
-``{job}``       *(Travis only)* The number of the job (without the build number
-                prefix)
+``{job}``       *(Travis and Appveyor only)* The number of the job, without the
+                build number prefix (Travis) or the job ID string (Appveyor)
 ==============  ===============================================================
 
 All timestamps and timestamp components are in UTC.
@@ -189,3 +212,11 @@ A Travis API access token can be acquired as follows:
   directly from the ``travis`` command.
 
 - Run ``travis token --com`` to retrieve the API access token.
+
+Appveyor
+~~~~~~~~
+
+In order to retrieve logs from Appveyor, an Appveyor API key *for the user
+account associated with the repository* (not a key for all accounts that one
+has access to!) must be specified via the ``APPVEYOR_TOKEN`` environment
+variable.  Such a key can be obtained at <https://ci.appveyor.com/api-keys>.
