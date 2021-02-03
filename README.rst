@@ -216,7 +216,7 @@ A Travis API access token can be acquired as follows:
 Appveyor
 ~~~~~~~~
 
-In order to retrieve logs from Appveyor, an Appveyor API key *for the user
-account associated with the repository* (not a key for all accounts that one
-has access to!) must be specified via the ``APPVEYOR_TOKEN`` environment
-variable.  Such a key can be obtained at <https://ci.appveyor.com/api-keys>.
+In order to retrieve logs from Appveyor, an Appveyor API key (for either all
+accessible accounts or just the specific account associated with the
+repository) must be specified via the ``APPVEYOR_TOKEN`` environment variable.
+Such a key can be obtained at <https://ci.appveyor.com/api-keys>.
