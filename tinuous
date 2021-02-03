@@ -466,6 +466,11 @@ def main(config, state, log_level):
             since_stamps = json.load(fp)
     except FileNotFoundError:
         since_stamps = {}
+    # Fetch tokens early in order to catch failures early:
+    tokens = {}
+    for name, cls in CI_SYSTEMS.items():
+        if cfg["ci"][name]:
+            tokens[name] = cls.get_auth_token()
     for name, cls in CI_SYSTEMS.items():
         if cfg["ci"][name]:
             log.info("Fetching logs from %s", name)
@@ -477,7 +482,7 @@ def main(config, state, log_level):
             ci = cls(
                 repo=cfg["repo"],
                 since=since,
-                token=cls.get_auth_token(),
+                token=tokens[name],
                 **cfg["ci"][name],
             )
             for bl in ci.get_build_logs(event_types):
