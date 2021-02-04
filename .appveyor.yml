@@ -2,8 +2,8 @@ image: Ubuntu
 
 environment:
   matrix:
-    - PYTHON: '3.8'
-    - PYTHON: '3.9'
+    - PY: '3.8'
+    - PY: '3.9'
 
 build: off
 
