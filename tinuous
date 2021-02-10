@@ -86,6 +86,34 @@ class CISystem(ABC):
 
 
 @dataclass
+class BuildLog(ABC):
+    created_at: datetime
+    event_type: EventType
+    event_id: str
+    commit: str
+    number: int
+
+    def path_fields(self) -> Dict[str, str]:
+        utc_date = self.created_at.astimezone(timezone.utc)
+        return {
+            "year": utc_date.strftime("%Y"),
+            "month": utc_date.strftime("%m"),
+            "day": utc_date.strftime("%d"),
+            "hour": utc_date.strftime("%H"),
+            "minute": utc_date.strftime("%M"),
+            "second": utc_date.strftime("%S"),
+            "type": self.event_type.value,
+            "type_id": self.event_id,
+            "commit": self.commit,
+            "number": str(self.number),
+        }
+
+    @abstractmethod
+    def download(self, path_template: str) -> None:
+        ...
+
+
+@dataclass
 class GitHubActions(CISystem):
     workflows: List[str]
 
@@ -137,34 +165,6 @@ class GitHubActions(CISystem):
                         yield GHABuildLog.from_workflow_run(self.dl_session, wf, run)
                     else:
                         log.info("Event type is %r; skipping", run.event)
-
-
-@dataclass
-class BuildLog(ABC):
-    created_at: datetime
-    event_type: EventType
-    event_id: str
-    commit: str
-    number: int
-
-    def path_fields(self) -> Dict[str, str]:
-        utc_date = self.created_at.astimezone(timezone.utc)
-        return {
-            "year": utc_date.strftime("%Y"),
-            "month": utc_date.strftime("%m"),
-            "day": utc_date.strftime("%d"),
-            "hour": utc_date.strftime("%H"),
-            "minute": utc_date.strftime("%M"),
-            "second": utc_date.strftime("%S"),
-            "type": self.event_type.value,
-            "type_id": self.event_id,
-            "commit": self.commit,
-            "number": str(self.number),
-        }
-
-    @abstractmethod
-    def download(self, path_template: str) -> None:
-        ...
 
 
 @dataclass
