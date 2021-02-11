@@ -16,6 +16,7 @@ import logging
 import os
 from pathlib import Path
 import re
+from shutil import rmtree
 import subprocess
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Type
 from urllib.parse import quote
@@ -243,8 +244,12 @@ class GHABuildLog(BuildLog):
         )
         r = self.session.get(self.logs_url)
         r.raise_for_status()
-        with BytesIO(r.content) as blob, ZipFile(blob) as zf:
-            zf.extractall(p)
+        try:
+            with BytesIO(r.content) as blob, ZipFile(blob) as zf:
+                zf.extractall(p)
+        except BaseException:
+            rmtree(p)
+            raise
 
 
 class Travis(CISystem):
@@ -393,9 +398,13 @@ class TravisJobLog(BuildLog):
             p,
         )
         r = self.client.get(f"/job/{self.job_id}/log.txt", stream=True)
-        with p.open("wb") as fp:
-            for chunk in r.iter_content(chunk_size=8192):
-                fp.write(chunk)
+        try:
+            with p.open("wb") as fp:
+                for chunk in r.iter_content(chunk_size=8192):
+                    fp.write(chunk)
+        except BaseException:
+            p.unlink(missing_ok=True)
+            raise
 
 
 @dataclass
@@ -530,9 +539,13 @@ class AppveyorJobLog(BuildLog):
             p,
         )
         r = self.client.get(f"/api/buildjobs/{self.job}/log", stream=True)
-        with p.open("wb") as fp:
-            for chunk in r.iter_content(chunk_size=8192):
-                fp.write(chunk)
+        try:
+            with p.open("wb") as fp:
+                for chunk in r.iter_content(chunk_size=8192):
+                    fp.write(chunk)
+        except BaseException:
+            p.unlink(missing_ok=True)
+            raise
 
 
 CI_SYSTEMS: Dict[str, Type[CISystem]] = {
