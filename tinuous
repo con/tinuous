@@ -648,10 +648,10 @@ def main(config, state, log_level):
     # Fetch tokens early in order to catch failures early:
     tokens = {}
     for name, cls in CI_SYSTEMS.items():
-        if cfg["ci"][name]:
+        if any(v is not None for v in cfg["ci"][name].values()):
             tokens[name] = cls.get_auth_token()
     for name, cls in CI_SYSTEMS.items():
-        if cfg["ci"][name]:
+        if any(v is not None for v in cfg["ci"][name].values()):
             log.info("Fetching logs from %s", name)
             path_template = cfg["ci"][name].pop("path")
             try:
