@@ -30,4 +30,10 @@ jobs:
       - name: Basic smoketest
         run: python tinuous --help
 
+      - name: Install mypy
+        run: python -m pip install mypy
+
+      - name: Run mypy
+        run: mypy tinuous
+
 # vim:set et sts=2:
