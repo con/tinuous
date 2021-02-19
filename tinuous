@@ -18,17 +18,17 @@ from pathlib import Path
 import re
 from shutil import rmtree
 import subprocess
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Type
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 from urllib.parse import quote
 from zipfile import ZipFile
 
-import cfgv
 import click
 from click_loglevel import LogLevel
 from dateutil.parser import isoparse
 from github import Github
 from github.Workflow import Workflow
 from github.WorkflowRun import WorkflowRun
+from pydantic import BaseModel, validator
 import requests
 from yaml import safe_load
 
@@ -57,21 +57,20 @@ class EventType(Enum):
         }.get(travis_event)
 
 
+# We can't make this an ABC due to <https://github.com/python/mypy/issues/5374>
 @dataclass
-class CISystem(ABC):
+class CISystem:
     repo: str
     token: str = field(repr=False)
     since: datetime
     fetched: List[Tuple[datetime, bool]] = field(init=False, default_factory=list)
 
     @staticmethod
-    @abstractmethod
     def get_auth_token() -> str:
-        ...
+        raise NotImplementedError
 
-    @abstractmethod
     def get_build_logs(self, event_types: List[EventType]) -> Iterator["BuildLog"]:
-        ...
+        raise NotImplementedError
 
     def register_build(self, ts: datetime, processed: bool) -> None:
         heapq.heappush(self.fetched, (ts, processed))
@@ -86,8 +85,9 @@ class CISystem(ABC):
         return prev_ts
 
 
+# We can't make this an ABC due to <https://github.com/python/mypy/issues/5374>
 @dataclass
-class BuildLog(ABC):
+class BuildLog:
     created_at: datetime
     event_type: EventType
     event_id: str
@@ -109,9 +109,8 @@ class BuildLog(ABC):
             "number": str(self.number),
         }
 
-    @abstractmethod
     def download(self, path_template: str) -> None:
-        ...
+        raise NotImplementedError
 
 
 @dataclass
@@ -151,7 +150,8 @@ class GitHubActions(CISystem):
         for wffile in self.workflows:
             wf = repo.get_workflow(wffile)
             log.info("Fetching runs for workflow %s (%s)", wffile, wf.name)
-            for run in wf.get_runs():
+            for run in wf.get_runs():  # type: ignore[call-arg]
+                # <https://github.com/PyGithub/PyGithub/pull/1857>
                 run_event = EventType.from_gh_event(run.event)
                 ts = ensure_aware(run.created_at)
                 if ts <= self.since:
@@ -281,19 +281,22 @@ class Travis(CISystem):
         return token
 
     @cached_property
-    def session(self):
+    def session(self) -> requests.Session:
         s = requests.Session()
         s.headers["Travis-API-Version"] = "3"
         s.headers["Authorization"] = f"token {self.token}"
         return s
 
-    def get(self, path, **kwargs) -> requests.Response:
+    def get(self, path: str, **kwargs: Any) -> requests.Response:
         url = "https://api.travis-ci.com/" + path.lstrip("/")
         r = self.session.get(url, **kwargs)
+        assert isinstance(r, requests.Response)
         r.raise_for_status()
         return r
 
-    def paginate(self, path, params=None) -> Iterator[dict]:
+    def paginate(
+        self, path: str, params: Optional[Dict[str, str]] = None
+    ) -> Iterator[dict]:
         while True:
             data = self.get(path, params=params).json()
             yield from data[data["@type"]]
@@ -429,7 +432,7 @@ class Appveyor(CISystem):
         s.headers["Authorization"] = f"Bearer {self.token}"
         return s
 
-    def get(self, path, **kwargs) -> requests.Response:
+    def get(self, path: str, **kwargs: Any) -> requests.Response:
         url = "https://ci.appveyor.com/" + path.lstrip("/")
         r = self.session.get(url, **kwargs)
         r.raise_for_status()
@@ -536,71 +539,102 @@ class AppveyorJobLog(BuildLog):
         stream_to_file(r, p)
 
 
-CI_SYSTEMS: Dict[str, Type[CISystem]] = {
-    "github": GitHubActions,
-    "travis": Travis,
-    "appveyor": Appveyor,
-}
+class NoExtraModel(BaseModel):
+    class Config:
+        extra = "forbid"
 
 
-def check_repo(v: Any) -> None:
-    if not isinstance(v, str):
-        raise cfgv.ValidationError(f"Expected str, got {type(v).__name__}")
-    elif not re.fullmatch(r"[^/]+/[^/]+", v):
-        raise cfgv.ValidationError("Repo must be in the form 'OWNER/NAME'")
+class CIConfig(NoExtraModel, ABC):
+    path: str
+
+    @staticmethod
+    @abstractmethod
+    def get_auth_token() -> str:
+        ...
+
+    @abstractmethod
+    def get_system(self, repo: str, since: datetime, token: str) -> CISystem:
+        ...
 
 
-CONFIG_SCHEMA = cfgv.Map(
-    "Config",
-    None,
-    cfgv.NoAdditionalKeys(["repo", "ci", "since", "types"]),
-    cfgv.Required("repo", check_repo),
-    cfgv.RequiredRecurse(
-        "ci",
-        cfgv.Map(
-            "ci",
-            None,
-            cfgv.NoAdditionalKeys(list(CI_SYSTEMS.keys())),
-            cfgv.OptionalRecurse(
-                "github",
-                cfgv.Map(
-                    "ci.github",
-                    None,
-                    cfgv.NoAdditionalKeys(["path", "workflows"]),
-                    cfgv.Required("path", cfgv.check_string),
-                    cfgv.Required("workflows", cfgv.check_array(cfgv.check_string)),
-                ),
-                {},
-            ),
-            cfgv.OptionalRecurse(
-                "travis",
-                cfgv.Map(
-                    "ci.travis",
-                    None,
-                    cfgv.NoAdditionalKeys(["path"]),
-                    cfgv.Required("path", cfgv.check_string),
-                ),
-                {},
-            ),
-            cfgv.OptionalRecurse(
-                "appveyor",
-                cfgv.Map(
-                    "ci.appveyor",
-                    None,
-                    cfgv.NoAdditionalKeys(["path", "accountName", "projectSlug"]),
-                    cfgv.Required("path", cfgv.check_string),
-                    cfgv.Required("accountName", cfgv.check_string),
-                    cfgv.Optional("projectSlug", cfgv.check_string, None),
-                ),
-                {},
-            ),
-        ),
-    ),
-    cfgv.Required("since", cfgv.check_type(datetime)),
-    cfgv.Required(
-        "types", cfgv.check_array(cfgv.check_one_of([e.value for e in EventType]))
-    ),
-)
+class GitHubConfig(CIConfig):
+    workflows: List[str]
+
+    @staticmethod
+    def get_auth_token() -> str:
+        return GitHubActions.get_auth_token()
+
+    def get_system(self, repo: str, since: datetime, token: str) -> GitHubActions:
+        return GitHubActions(
+            repo=repo,
+            since=since,
+            token=token,
+            workflows=self.workflows,
+        )
+
+
+class TravisConfig(CIConfig):
+    @staticmethod
+    def get_auth_token() -> str:
+        return Travis.get_auth_token()
+
+    def get_system(self, repo: str, since: datetime, token: str) -> Travis:
+        return Travis(
+            repo=repo,
+            since=since,
+            token=token,
+        )
+
+
+class AppveyorConfig(CIConfig):
+    accountName: str
+    projectSlug: Optional[str] = None
+
+    @staticmethod
+    def get_auth_token() -> str:
+        return Appveyor.get_auth_token()
+
+    def get_system(self, repo: str, since: datetime, token: str) -> Appveyor:
+        return Appveyor(
+            repo=repo,
+            since=since,
+            token=token,
+            accountName=self.accountName,
+            projectSlug=self.projectSlug,
+        )
+
+
+class CIConfigDict(NoExtraModel):
+    github: Optional[GitHubConfig] = None
+    travis: Optional[TravisConfig] = None
+    appveyor: Optional[AppveyorConfig] = None
+
+    def items(self) -> Iterator[Tuple[str, CIConfig]]:
+        if (g := self.github) is not None:
+            yield ("github", g)
+        if (t := self.travis) is not None:
+            yield ("travis", t)
+        if (a := self.appveyor) is not None:
+            yield ("appveyor", a)
+
+
+class Config(NoExtraModel):
+    repo: str
+    ci: CIConfigDict
+    since: datetime
+    types: List[EventType]
+
+    @validator("repo")
+    def _validate_repo(cls, v: str) -> str:  # noqa: B902
+        if not re.fullmatch(r"[^/]+/[^/]+", v):
+            raise ValueError("Repo must be in the form 'OWNER/NAME'")
+        return v
+
+    @validator("since")
+    def _validate_since(cls, v: datetime) -> datetime:  # noqa: B902
+        if v.tzinfo is None:
+            raise ValueError("'since' timestamp must include timezone offset")
+        return v
 
 
 @click.command()
@@ -628,53 +662,43 @@ CONFIG_SCHEMA = cfgv.Map(
     help="Store program state in the given file",
     show_default=True,
 )
-def main(config, state, log_level):
+def main(config: str, state: str, log_level: int) -> None:
     logging.basicConfig(
         format="%(asctime)s [%(levelname)-8s] %(name)s %(message)s",
         datefmt="%Y-%m-%dT%H:%M:%S%z",
         level=log_level,
     )
-    cfg = cfgv.load_from_filename(
-        config,
-        schema=CONFIG_SCHEMA,
-        load_strategy=safe_load,
-    )
-    event_types = [EventType(e) for e in cfg["types"]]
+    with open(config) as fp:
+        cfg = Config.parse_obj(safe_load(fp))
+    since_stamps: Dict[str, str]
     try:
         with open(state) as fp:
             since_stamps = json.load(fp)
     except FileNotFoundError:
         since_stamps = {}
     # Fetch tokens early in order to catch failures early:
-    tokens = {}
-    for name, cls in CI_SYSTEMS.items():
-        if any(v is not None for v in cfg["ci"][name].values()):
-            tokens[name] = cls.get_auth_token()
-    for name, cls in CI_SYSTEMS.items():
-        if any(v is not None for v in cfg["ci"][name].values()):
-            log.info("Fetching logs from %s", name)
-            path_template = cfg["ci"][name].pop("path")
-            try:
-                since = datetime.fromisoformat(since_stamps[name])
-            except KeyError:
-                since = cfg["since"]
-            ci = cls(
-                repo=cfg["repo"],
-                since=since,
-                token=tokens[name],
-                **cfg["ci"][name],
-            )
-            for bl in ci.get_build_logs(event_types):
-                bl.download(path_template)
-            since_stamps[name] = ci.new_since().isoformat()
-            log.debug("%s timestamp floor updated to %s", since_stamps[name])
+    tokens: Dict[str, str] = {}
+    for name, cicfg in cfg.ci.items():
+        tokens[name] = cicfg.get_auth_token()
+    for name, cicfg in cfg.ci.items():
+        log.info("Fetching logs from %s", name)
+        try:
+            since = datetime.fromisoformat(since_stamps[name])
+        except KeyError:
+            since = cfg.since
+        ci = cicfg.get_system(repo=cfg.repo, since=since, token=tokens[name])
+        for bl in ci.get_build_logs(cfg.types):
+            bl.download(cicfg.path)
+        since_stamps[name] = ci.new_since().isoformat()
+        log.debug("%s timestamp floor updated to %s", since_stamps[name])
     with open(state, "w") as fp:
         json.dump(since_stamps, fp)
 
 
 def ensure_aware(dt: datetime) -> datetime:
     # Pygithub returns naïve datetimes for timestamps with a "Z" suffix.  Until
-    # that's fixed, we need to make such datetimes timezone-aware manually.
+    # that's fixed <https://github.com/PyGithub/PyGithub/pull/1831>, we need to
+    # make such datetimes timezone-aware manually.
     return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
 
 
