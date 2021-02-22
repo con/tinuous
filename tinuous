@@ -18,7 +18,7 @@ from pathlib import Path
 import re
 from shutil import rmtree
 import subprocess
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Pattern, Tuple
 from urllib.parse import quote
 from zipfile import ZipFile
 
@@ -28,7 +28,8 @@ from dateutil.parser import isoparse
 from github import Github
 from github.Workflow import Workflow
 from github.WorkflowRun import WorkflowRun
-from pydantic import BaseModel, validator
+from in_place import InPlace
+from pydantic import BaseModel, Field, validator
 import requests
 from yaml import safe_load
 
@@ -109,7 +110,7 @@ class BuildLog:
             "number": str(self.number),
         }
 
-    def download(self, path_template: str) -> None:
+    def download(self, path_template: str) -> List[Path]:
         raise NotImplementedError
 
 
@@ -223,7 +224,7 @@ class GHABuildLog(BuildLog):
         )
         return fields
 
-    def download(self, path_template: str) -> None:
+    def download(self, path_template: str) -> List[Path]:
         p = Path(path_template.format_map(self.path_fields()))
         p.mkdir(parents=True, exist_ok=True)
         if any(p.iterdir()):
@@ -234,7 +235,7 @@ class GHABuildLog(BuildLog):
                 self.number,
                 p,
             )
-            return
+            return []
         log.info(
             "Downloading logs for %s (%s) #%s to %s",
             self.workflow_file,
@@ -250,6 +251,7 @@ class GHABuildLog(BuildLog):
         except BaseException:
             rmtree(p)
             raise
+        return list(p.rglob("*.txt"))
 
 
 class Travis(CISystem):
@@ -383,7 +385,7 @@ class TravisJobLog(BuildLog):
         )
         return fields
 
-    def download(self, path_template: str) -> None:
+    def download(self, path_template: str) -> List[Path]:
         p = Path(path_template.format_map(self.path_fields()))
         if p.exists():
             log.info(
@@ -392,7 +394,7 @@ class TravisJobLog(BuildLog):
                 self.job,
                 p,
             )
-            return
+            return []
         p.parent.mkdir(parents=True, exist_ok=True)
         log.info(
             "Downloading logs for job %s.%s to %s",
@@ -402,6 +404,7 @@ class TravisJobLog(BuildLog):
         )
         r = self.client.get(f"/job/{self.job_id}/log.txt", stream=True)
         stream_to_file(r, p)
+        return [p]
 
 
 @dataclass
@@ -518,7 +521,7 @@ class AppveyorJobLog(BuildLog):
         )
         return fields
 
-    def download(self, path_template: str) -> None:
+    def download(self, path_template: str) -> List[Path]:
         p = Path(path_template.format_map(self.path_fields()))
         if p.exists():
             log.info(
@@ -527,7 +530,7 @@ class AppveyorJobLog(BuildLog):
                 self.job,
                 p,
             )
-            return
+            return []
         p.parent.mkdir(parents=True, exist_ok=True)
         log.info(
             "Downloading logs for build %s, job %s to %s",
@@ -537,6 +540,7 @@ class AppveyorJobLog(BuildLog):
         )
         r = self.client.get(f"/api/buildjobs/{self.job}/log", stream=True)
         stream_to_file(r, p)
+        return [p]
 
 
 class NoExtraModel(BaseModel):
@@ -623,6 +627,7 @@ class Config(NoExtraModel):
     ci: CIConfigDict
     since: datetime
     types: List[EventType]
+    secrets: Dict[str, Pattern] = Field(default_factory=dict)
 
     @validator("repo")
     def _validate_repo(cls, v: str) -> str:  # noqa: B902
@@ -655,6 +660,11 @@ class Config(NoExtraModel):
     show_default=True,
 )
 @click.option(
+    "--sanitize-secrets",
+    is_flag=True,
+    help="Sanitize strings matching secret patterns",
+)
+@click.option(
     "-S",
     "--state",
     type=click.Path(dir_okay=False, writable=True),
@@ -662,7 +672,7 @@ class Config(NoExtraModel):
     help="Store program state in the given file",
     show_default=True,
 )
-def main(config: str, state: str, log_level: int) -> None:
+def main(config: str, state: str, log_level: int, sanitize_secrets: bool) -> None:
     logging.basicConfig(
         format="%(asctime)s [%(levelname)-8s] %(name)s %(message)s",
         datefmt="%Y-%m-%dT%H:%M:%S%z",
@@ -670,6 +680,8 @@ def main(config: str, state: str, log_level: int) -> None:
     )
     with open(config) as fp:
         cfg = Config.parse_obj(safe_load(fp))
+    if sanitize_secrets and not cfg.secrets:
+        log.warning("--sanitize-secrets set but no secrets given in configuration")
     since_stamps: Dict[str, str]
     try:
         with open(state) as fp:
@@ -688,7 +700,20 @@ def main(config: str, state: str, log_level: int) -> None:
             since = cfg.since
         ci = cicfg.get_system(repo=cfg.repo, since=since, token=tokens[name])
         for bl in ci.get_build_logs(cfg.types):
-            bl.download(cicfg.path)
+            logs = bl.download(cicfg.path)
+            if sanitize_secrets and cfg.secrets:
+                for p in logs:
+                    log.info("Sanitizing %s", p)
+                    with InPlace(p, mode="t", encoding="utf-8") as fp:
+                        for i, line in enumerate(fp, start=1):
+                            for name, rgx in cfg.secrets.items():
+                                line, subs = rgx.subn(
+                                    lambda m: "*" * len(m.group()),
+                                    line,
+                                )
+                                if subs:
+                                    log.info("Found %s secret on line %d", name, i)
+                            fp.write(line)
         since_stamps[name] = ci.new_since().isoformat()
         log.debug("%s timestamp floor updated to %s", since_stamps[name])
     with open(state, "w") as fp:
