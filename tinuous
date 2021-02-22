@@ -642,7 +642,7 @@ class Config(NoExtraModel):
         return v
 
 
-@click.command()
+@click.group()
 @click.option(
     "-c",
     "--config",
@@ -659,6 +659,19 @@ class Config(NoExtraModel):
     help="Set logging level",
     show_default=True,
 )
+@click.pass_context
+def main(ctx: click.Context, config: str, log_level: int) -> None:
+    """ Download build logs from GitHub Actions, Travis, and Appveyor """
+    logging.basicConfig(
+        format="%(asctime)s [%(levelname)-8s] %(name)s %(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%S%z",
+        level=log_level,
+    )
+    with open(config) as fp:
+        ctx.obj = Config.parse_obj(safe_load(fp))
+
+
+@main.command()
 @click.option(
     "--sanitize-secrets",
     is_flag=True,
@@ -672,14 +685,9 @@ class Config(NoExtraModel):
     help="Store program state in the given file",
     show_default=True,
 )
-def main(config: str, state: str, log_level: int, sanitize_secrets: bool) -> None:
-    logging.basicConfig(
-        format="%(asctime)s [%(levelname)-8s] %(name)s %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%S%z",
-        level=log_level,
-    )
-    with open(config) as fp:
-        cfg = Config.parse_obj(safe_load(fp))
+@click.pass_obj
+def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
+    """ Download logs """
     if sanitize_secrets and not cfg.secrets:
         log.warning("--sanitize-secrets set but no secrets given in configuration")
     since_stamps: Dict[str, str]
@@ -703,21 +711,22 @@ def main(config: str, state: str, log_level: int, sanitize_secrets: bool) -> Non
             logs = bl.download(cicfg.path)
             if sanitize_secrets and cfg.secrets:
                 for p in logs:
-                    log.info("Sanitizing %s", p)
-                    with InPlace(p, mode="t", encoding="utf-8") as fp:
-                        for i, line in enumerate(fp, start=1):
-                            for name, rgx in cfg.secrets.items():
-                                line, subs = rgx.subn(
-                                    lambda m: "*" * len(m.group()),
-                                    line,
-                                )
-                                if subs:
-                                    log.info("Found %s secret on line %d", name, i)
-                            fp.write(line)
+                    sanitize(p, cfg.secrets)
         since_stamps[name] = ci.new_since().isoformat()
         log.debug("%s timestamp floor updated to %s", since_stamps[name])
     with open(state, "w") as fp:
         json.dump(since_stamps, fp)
+
+
+@main.command("sanitize")
+@click.argument(
+    "path", type=click.Path(exists=True, dir_okay=False, writable=True), nargs=-1
+)
+@click.pass_obj
+def sanitize_cmd(cfg: Config, path: List[str]) -> None:
+    """ Sanitize secrets in logs """
+    for p in path:
+        sanitize(Path(p), cfg.secrets)
 
 
 def ensure_aware(dt: datetime) -> datetime:
@@ -740,6 +749,20 @@ def stream_to_file(r: requests.Response, p: Path) -> None:
     except BaseException:
         p.unlink(missing_ok=True)
         raise
+
+
+def sanitize(p: Path, secrets: Dict[str, Pattern]) -> None:
+    log.info("Sanitizing %s", p)
+    with InPlace(p, mode="t", encoding="utf-8", newline="") as fp:
+        for i, line in enumerate(fp, start=1):
+            for name, rgx in secrets.items():
+                line, subs = rgx.subn(
+                    lambda m: "*" * len(m.group()),
+                    line,
+                )
+                if subs:
+                    log.info("Found %s secret on line %d", name, i)
+            fp.write(line)
 
 
 if __name__ == "__main__":
