@@ -143,6 +143,13 @@ keys:
     *(optional)* A mapping from names (used in log messages) to regexes
     matching secrets to sanitize
 
+``allow-secrets-regex``
+    *(optional)* Any strings that match a ``secrets`` regex and also match this
+    regex will not be sanitized.  Note that ``allow-secrets-regex`` is tested
+    against just the substring that matched a ``secrets`` regex without any
+    surrounding text, and so lookahead and lookbehind will not work in this
+    regex.
+
 All fields are required unless stated otherwise.
 
 A sample config file:

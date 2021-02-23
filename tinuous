@@ -18,7 +18,7 @@ from pathlib import Path
 import re
 from shutil import rmtree
 import subprocess
-from typing import Any, Dict, Iterator, List, Optional, Pattern, Tuple
+from typing import Any, Dict, Iterator, List, Match, Optional, Pattern, Tuple
 from urllib.parse import quote
 from zipfile import ZipFile
 
@@ -545,6 +545,7 @@ class AppveyorJobLog(BuildLog):
 
 class NoExtraModel(BaseModel):
     class Config:
+        allow_population_by_field_name = True
         extra = "forbid"
 
 
@@ -628,6 +629,7 @@ class Config(NoExtraModel):
     since: datetime
     types: List[EventType]
     secrets: Dict[str, Pattern] = Field(default_factory=dict)
+    allow_secrets_regex: Optional[Pattern] = Field(None, alias="allow-secrets-regex")
 
     @validator("repo")
     def _validate_repo(cls, v: str) -> str:  # noqa: B902
@@ -711,7 +713,7 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
             logs = bl.download(cicfg.path)
             if sanitize_secrets and cfg.secrets:
                 for p in logs:
-                    sanitize(p, cfg.secrets)
+                    sanitize(p, cfg.secrets, cfg.allow_secrets_regex)
         since_stamps[name] = ci.new_since().isoformat()
         log.debug("%s timestamp floor updated to %s", since_stamps[name])
     with open(state, "w") as fp:
@@ -726,7 +728,7 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
 def sanitize_cmd(cfg: Config, path: List[str]) -> None:
     """ Sanitize secrets in logs """
     for p in path:
-        sanitize(Path(p), cfg.secrets)
+        sanitize(Path(p), cfg.secrets, cfg.allow_secrets_regex)
 
 
 def ensure_aware(dt: datetime) -> datetime:
@@ -751,17 +753,25 @@ def stream_to_file(r: requests.Response, p: Path) -> None:
         raise
 
 
-def sanitize(p: Path, secrets: Dict[str, Pattern]) -> None:
+def sanitize(
+    p: Path, secrets: Dict[str, Pattern], allow_secrets: Optional[Pattern]
+) -> None:
+    def replace(m: Match) -> str:
+        s = m.group()
+        assert isinstance(s, str)
+        if allow_secrets is not None and allow_secrets.search(s):
+            return s
+        else:
+            return "*" * len(s)
+
     log.info("Sanitizing %s", p)
     with InPlace(p, mode="t", encoding="utf-8", newline="") as fp:
         for i, line in enumerate(fp, start=1):
             for name, rgx in secrets.items():
-                line, subs = rgx.subn(
-                    lambda m: "*" * len(m.group()),
-                    line,
-                )
-                if subs:
+                newline = rgx.sub(replace, line)
+                if newline != line:
                     log.info("Found %s secret on line %d", name, i)
+                line = newline
             fp.write(line)
 
 
