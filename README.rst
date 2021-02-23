@@ -6,15 +6,11 @@ Usage
 
 ::
 
-    ./tinuous [<options>]
-
-``tinuous`` reads a configuration file telling it what repository to retrieve
-logs for, where to retrieve them from, and where to save them, and then it
-carries those steps out.
+    ./tinuous [<global options>] <command> [<args> ...]
 
 
-Options
--------
+Global Options
+--------------
 
 -c FILE, --config FILE          Read configuration from the given file [default
                                 value: ``config.yml``]
@@ -25,10 +21,38 @@ Options
                                 case-insensitive) and their Python integer
                                 equivalents.  [default value: INFO]
 
+
+``fetch`` Command
+-----------------
+
+::
+
+    ./tinuous [<global options>] fetch [<options>]
+
+``tinuous fetch`` reads a configuration file telling it what repository to
+retrieve logs for, where to retrieve them from, and where to save them, and
+then it carries those steps out.
+
+Options
+~~~~~~~
+
+--sanitize-secrets              Sanitize secrets from log files after
+                                downloading
+
 -S FILE, --state FILE           Store program state (e.g., timestamps before
                                 which all logs are known to have been fetched)
                                 in the given file [default value:
                                 ``.dlstate.json``]
+
+``sanitize`` Command
+--------------------
+
+::
+
+    ./tinuous [<global options>] sanitize <path> ...
+
+Sanitize the given files, replacing all strings matching a secret regex with a
+series of asterisks.
 
 
 Configuration
@@ -115,6 +139,17 @@ keys:
     ``push``
         A build in response to new commits
 
+``secrets``
+    *(optional)* A mapping from names (used in log messages) to regexes
+    matching secrets to sanitize
+
+``allow-secrets-regex``
+    *(optional)* Any strings that match a ``secrets`` regex and also match this
+    regex will not be sanitized.  Note that ``allow-secrets-regex`` is tested
+    against just the substring that matched a ``secrets`` regex without any
+    surrounding text, and so lookahead and lookbehind will not work in this
+    regex.
+
 All fields are required unless stated otherwise.
 
 A sample config file:
@@ -137,6 +172,12 @@ A sample config file:
         projectSlug: datalad
     since: 2021-01-20T00:00:00Z
     types: [cron, pr, push]
+    secrets:
+      github: '\b(v1\.)?[a-f0-9]{40}\b'
+      docker-hub: '\b[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\b'
+      appveyor: '\b(v2\.)?[a-z0-9]{20}\b'
+      travis: '\b[a-zA-Z0-9]{22}\b'
+      aws: '\b[a-zA-Z0-9+/]{40}\b'
 
 
 Path Templates
