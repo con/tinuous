@@ -198,7 +198,8 @@ Placeholder     Definition
 ``{hour}``      The two-digit hour at which the build was started
 ``{minute}``    The two-digit minute at which the build was started
 ``{second}``    The two-digit second at which the build was started
-``{ci}``        The name of the CI system (``github`` or ``travis``)
+``{ci}``        The name of the CI system (``github``, ``travis``, or
+                ``appveyor``)
 ``{type}``      The event type that triggered the build (``cron``, ``pr``, or
                 ``push``)
 ``{type_id}``   Further information on the triggering event; for ``cron``, this
@@ -210,6 +211,8 @@ Placeholder     Definition
 ``{commit}``    The hash of the commit the build ran against
 ``{number}``    The run number of the workflow run (GitHub) or the build number
                 (Travis and Appveyor)
+``{status}``    The success status of the build; the exact strings used depend
+                on the CI system
 ``{wf_name}``   *(GitHub only)* The name of the workflow
 ``{wf_file}``   *(GitHub only)* The basename of the workflow file (including
                 the file extension)
