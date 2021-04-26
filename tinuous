@@ -24,6 +24,7 @@ from zipfile import ZipFile
 
 import click
 from click_loglevel import LogLevel
+from datalad.api import Dataset
 from dateutil.parser import isoparse
 from github import Github
 from github.Workflow import Workflow
@@ -110,7 +111,10 @@ class BuildLog:
             "number": str(self.number),
         }
 
-    def download(self, path_template: str) -> List[Path]:
+    def expand_path(self, path_template: str) -> str:
+        return path_template.format_map(self.path_fields())
+
+    def download(self, path: Path) -> List[Path]:
         raise NotImplementedError
 
 
@@ -224,16 +228,15 @@ class GHABuildLog(BuildLog):
         )
         return fields
 
-    def download(self, path_template: str) -> List[Path]:
-        p = Path(path_template.format_map(self.path_fields()))
-        p.mkdir(parents=True, exist_ok=True)
-        if any(p.iterdir()):
+    def download(self, path: Path) -> List[Path]:
+        path.mkdir(parents=True, exist_ok=True)
+        if any(path.iterdir()):
             log.info(
                 "Logs for %s (%s) #%s already downloaded to %s; skipping",
                 self.workflow_file,
                 self.workflow_name,
                 self.number,
-                p,
+                path,
             )
             return []
         log.info(
@@ -241,17 +244,17 @@ class GHABuildLog(BuildLog):
             self.workflow_file,
             self.workflow_name,
             self.number,
-            p,
+            path,
         )
         r = self.session.get(self.logs_url)
         r.raise_for_status()
         try:
             with BytesIO(r.content) as blob, ZipFile(blob) as zf:
-                zf.extractall(p)
+                zf.extractall(path)
         except BaseException:
-            rmtree(p)
+            rmtree(path)
             raise
-        return list(p.rglob("*.txt"))
+        return list(path.rglob("*.txt"))
 
 
 class Travis(CISystem):
@@ -385,26 +388,25 @@ class TravisJobLog(BuildLog):
         )
         return fields
 
-    def download(self, path_template: str) -> List[Path]:
-        p = Path(path_template.format_map(self.path_fields()))
-        if p.exists():
+    def download(self, path: Path) -> List[Path]:
+        if path.exists():
             log.info(
                 "Logs for job %s.%s already downloaded to %s; skipping",
                 self.number,
                 self.job,
-                p,
+                path,
             )
             return []
-        p.parent.mkdir(parents=True, exist_ok=True)
+        path.parent.mkdir(parents=True, exist_ok=True)
         log.info(
             "Downloading logs for job %s.%s to %s",
             self.number,
             self.job,
-            p,
+            path,
         )
         r = self.client.get(f"/job/{self.job_id}/log.txt", stream=True)
-        stream_to_file(r, p)
-        return [p]
+        stream_to_file(r, path)
+        return [path]
 
 
 @dataclass
@@ -521,26 +523,25 @@ class AppveyorJobLog(BuildLog):
         )
         return fields
 
-    def download(self, path_template: str) -> List[Path]:
-        p = Path(path_template.format_map(self.path_fields()))
-        if p.exists():
+    def download(self, path: Path) -> List[Path]:
+        if path.exists():
             log.info(
                 "Logs for build %s, job %s already downloaded to %s; skipping",
                 self.number,
                 self.job,
-                p,
+                path,
             )
             return []
-        p.parent.mkdir(parents=True, exist_ok=True)
+        path.parent.mkdir(parents=True, exist_ok=True)
         log.info(
             "Downloading logs for build %s, job %s to %s",
             self.number,
             self.job,
-            p,
+            path,
         )
         r = self.client.get(f"/api/buildjobs/{self.job}/log", stream=True)
-        stream_to_file(r, p)
-        return [p]
+        stream_to_file(r, path)
+        return [path]
 
 
 class NoExtraModel(BaseModel):
@@ -623,6 +624,11 @@ class CIConfigDict(NoExtraModel):
             yield ("appveyor", a)
 
 
+class DataladConfig(NoExtraModel):
+    enabled: bool = False
+    cfg_proc: Optional[str] = None
+
+
 class Config(NoExtraModel):
     repo: str
     ci: CIConfigDict
@@ -630,6 +636,7 @@ class Config(NoExtraModel):
     types: List[EventType]
     secrets: Dict[str, Pattern] = Field(default_factory=dict)
     allow_secrets_regex: Optional[Pattern] = Field(None, alias="allow-secrets-regex")
+    datalad: DataladConfig = Field(default_factory=DataladConfig)
 
     @validator("repo")
     def _validate_repo(cls, v: str) -> str:  # noqa: B902
@@ -702,6 +709,10 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
     tokens: Dict[str, str] = {}
     for name, cicfg in cfg.ci.items():
         tokens[name] = cicfg.get_auth_token()
+    ds = Dataset(os.curdir)
+    if cfg.datalad.enabled and not ds.is_installed():
+        ds.create(force=True, cfg_proc=cfg.datalad.cfg_proc)
+    added = 0
     for name, cicfg in cfg.ci.items():
         log.info("Fetching logs from %s", name)
         try:
@@ -710,14 +721,31 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
             since = cfg.since
         ci = cicfg.get_system(repo=cfg.repo, since=since, token=tokens[name])
         for bl in ci.get_build_logs(cfg.types):
-            logs = bl.download(cicfg.path)
+            path = bl.expand_path(cicfg.path)
+            if cfg.datalad.enabled:
+                dspath, sep, subpath = path.partition("//")
+                if not sep:
+                    raise click.UsageError(
+                        f"Datalad enabled but {name} path lacks '//' dataset separator"
+                    )
+                elif not dspath or not subpath:
+                    raise click.UsageError(
+                        "'//' dataset separator must be in middle of path"
+                    )
+                if not Path(dspath).exists():
+                    ds.create(dspath, cfg_proc=cfg.datalad.cfg_proc)
+            logs = bl.download(Path(path))
+            added += len(logs)
             if sanitize_secrets and cfg.secrets:
                 for p in logs:
                     sanitize(p, cfg.secrets, cfg.allow_secrets_regex)
         since_stamps[name] = ci.new_since().isoformat()
-        log.debug("%s timestamp floor updated to %s", since_stamps[name])
+        log.debug("%s timestamp floor updated to %s", name, since_stamps[name])
     with open(state, "w") as fp:
         json.dump(since_stamps, fp)
+    log.info("%d logs downloaded", added)
+    if cfg.datalad.enabled and added:
+        ds.save(recursive=True, message=f"[tinuous] {added} logs added")
 
 
 @main.command("sanitize")
