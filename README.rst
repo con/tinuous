@@ -150,6 +150,24 @@ keys:
     surrounding text, and so lookahead and lookbehind will not work in this
     regex.
 
+``datalad``
+    *(optional)* A sub-mapping describing integration of ``tinuous`` with
+    Datalad_.  Subfields:
+
+    ``enabled``
+        *(optional)* A boolean.  If true (default false), the current directory
+        will be converted into a Datalad dataset if it is not one already,
+        the logs will optionally be divided up into subdatasets, and all new
+        logs will be committed at the end of a run of ``tinuous fetch``.
+        ``path`` template strings may contain ``//`` separators indicating the
+        boundaries of subdatasets.
+
+    ``cfg_proc``
+        *(optional)* Procedure to run on the dataset & subdatasets when
+        creating them
+
+    .. _DataLad: https://www.datalad.org
+
 All fields are required unless stated otherwise.
 
 A sample config file:
@@ -178,6 +196,9 @@ A sample config file:
       appveyor: '\b(v2\.)?[a-z0-9]{20}\b'
       travis: '\b[a-zA-Z0-9]{22}\b'
       aws: '\b[a-zA-Z0-9+/]{40}\b'
+    datalad:
+      enabled: true
+      cfg_proc: text2git
 
 
 Path Templates
