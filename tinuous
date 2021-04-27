@@ -36,6 +36,24 @@ from yaml import safe_load
 
 log = logging.getLogger("tinuous")
 
+COMMON_STATUS_MAP = {
+    "success": "success",
+    "passed": "success",
+    "failure": "failed",
+    "failed": "failed",
+    "errored": "errored",
+    "timed_out": "errored",
+    "neutral": "incomplete",
+    "action_required": "incomplete",
+    "cancelled": "incomplete",
+    "skipped": "incomplete",
+    "stale": "incomplete",
+    # Error on unknown so we're forced to categorize them.
+}
+
+# Safeguard against typos:
+assert set(COMMON_STATUS_MAP.values()) == {"success", "failed", "errored", "incomplete"}
+
 
 class EventType(Enum):
     CRON = "cron"
@@ -95,6 +113,7 @@ class BuildLog:
     event_id: str
     commit: str
     number: int
+    status: str
 
     def path_fields(self) -> Dict[str, str]:
         utc_date = self.created_at.astimezone(timezone.utc)
@@ -109,6 +128,8 @@ class BuildLog:
             "type_id": self.event_id,
             "commit": self.commit,
             "number": str(self.number),
+            "status": self.status,
+            "common_status": COMMON_STATUS_MAP[self.status],
         }
 
     def expand_path(self, path_template: str) -> str:
@@ -214,6 +235,7 @@ class GHABuildLog(BuildLog):
             workflow_file=workflow.path.split("/")[-1],
             number=run.run_number,
             run_id=run.id,
+            status=run.conclusion,
         )
 
     def path_fields(self) -> Dict[str, str]:
@@ -376,6 +398,7 @@ class TravisJobLog(BuildLog):
             number=int(build["number"]),
             job=removeprefix(job["number"], f"{build['number']}."),
             job_id=job["id"],
+            status=job["state"],
         )
 
     def path_fields(self) -> Dict[str, str]:
@@ -511,6 +534,7 @@ class AppveyorJobLog(BuildLog):
             commit=build["commitId"],
             number=build["buildNumber"],
             job=job["jobId"],
+            status=job["status"],
         )
 
     def path_fields(self) -> Dict[str, str]:
