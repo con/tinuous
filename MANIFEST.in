@@ -1,0 +1,3 @@
+include CHANGELOG.md LICENSE
+include versioneer.py
+global-exclude *.py[cod]

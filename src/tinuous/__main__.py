@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-
-__author__ = "John T. Wodder II"
-__author_email__ = "tinuous@varonathe.org"
-__license__ = "MIT"
-
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone

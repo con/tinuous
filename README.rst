@@ -1,12 +1,44 @@
-This script downloads build logs for a GitHub repository from GitHub Actions,
-Travis-CI.com, and/or Appveyor.  It requires Python 3.8 or later.
+.. image:: https://github.com/con/tinuous/workflows/Test/badge.svg?branch=master
+    :target: https://github.com/con/tinuous/actions?workflow=Test
+    :alt: GitHub Actions Status
+
+.. image:: https://travis-ci.com/con/tinuous.svg?branch=master
+    :target: https://travis-ci.com/con/tinuous
+    :alt: Travis CI Status
+
+.. image:: https://ci.appveyor.com/api/projects/status/github/con/tinuous?branch=master&svg=true
+    :target: https://ci.appveyor.com/project/yarikoptic/tinuous/branch/master
+    :alt: Appveyor Status
+
+.. image:: https://img.shields.io/pypi/pyversions/tinuous.svg
+    :target: https://pypi.org/project/tinuous/
+
+.. image:: https://img.shields.io/github/license/con/tinuous.svg
+    :target: https://opensource.org/licenses/MIT
+    :alt: MIT License
+
+`GitHub <https://github.com/con/tinuous>`_
+| `PyPI <https://pypi.org/project/tinuous/>`_
+| `Issues <https://github.com/con/tinuous/issues>`_
+
+``tinuous`` is a command for downloading build logs for a GitHub repository
+from GitHub Actions, Travis-CI.com, and/or Appveyor.
+
+Installation
+============
+``tinuous`` requires Python 3.8 or higher.  Just use `pip
+<https://pip.pypa.io>`_ for Python 3 (You have pip, right?) to install
+``tinuous`` and its dependencies::
+
+    python3 -m pip install tinuous
+
 
 Usage
 =====
 
 ::
 
-    ./tinuous [<global options>] <command> [<args> ...]
+    tinuous [<global options>] <command> [<args> ...]
 
 
 Global Options
@@ -27,7 +59,7 @@ Global Options
 
 ::
 
-    ./tinuous [<global options>] fetch [<options>]
+    tinuous [<global options>] fetch [<options>]
 
 ``tinuous fetch`` reads a configuration file telling it what repository to
 retrieve logs for, where to retrieve them from, and where to save them, and
@@ -49,7 +81,7 @@ Options
 
 ::
 
-    ./tinuous [<global options>] sanitize <path> ...
+    tinuous [<global options>] sanitize <path> ...
 
 Sanitize the given files, replacing all strings matching a secret regex with a
 series of asterisks.
