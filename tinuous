@@ -50,6 +50,10 @@ COMMON_STATUS_MAP = {
     # Error on unknown so we're forced to categorize them.
 }
 
+# Safeguard against typos:
+assert set(COMMON_STATUS_MAP.values()) == {"success", "failed", "errored", "incomplete"}
+
+
 class EventType(Enum):
     CRON = "cron"
     PUSH = "push"
