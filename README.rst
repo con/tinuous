@@ -157,10 +157,10 @@ keys:
     ``enabled``
         *(optional)* A boolean.  If true (default false), the current directory
         will be converted into a Datalad dataset if it is not one already,
-        the logs will be divided up into subdatasets, and all new logs will be
-        committed at the end of a run of ``tinuous fetch``.  All ``path``
-        template strings must contain a ``//`` separator; the part to the left
-        of the separator will be used as the path to the subdataset.
+        the logs will optionally be divided up into subdatasets, and all new
+        logs will be committed at the end of a run of ``tinuous fetch``.
+        ``path`` template strings may contain ``//`` separators indicating the
+        boundaries of subdatasets.
 
     ``cfg_proc``
         *(optional)* Procedure to run on the dataset & subdatasets when

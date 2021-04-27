@@ -723,17 +723,13 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
         for bl in ci.get_build_logs(cfg.types):
             path = bl.expand_path(cicfg.path)
             if cfg.datalad.enabled:
-                dspath, sep, subpath = path.partition("//")
-                if not sep:
-                    raise click.UsageError(
-                        f"Datalad enabled but {name} path lacks '//' dataset separator"
-                    )
-                elif not dspath or not subpath:
-                    raise click.UsageError(
-                        "'//' dataset separator must be in middle of path"
-                    )
-                if not Path(dspath).exists():
-                    ds.create(dspath, cfg_proc=cfg.datalad.cfg_proc)
+                dspaths = path.split("//")
+                if "" in dspaths:
+                    raise click.UsageError("Path contains empty '//'-delimited segment")
+                for i in range(1, len(dspaths)):
+                    dsp = "/".join(dspaths[:i])
+                    if not Path(dsp).exists():
+                        ds.create(dsp, cfg_proc=cfg.datalad.cfg_proc)
             logs = bl.download(Path(path))
             added += len(logs)
             if sanitize_secrets and cfg.secrets:
