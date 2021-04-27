@@ -12,4 +12,4 @@ install:
   - $HOME/venv$PY/bin/python -m pip install .
 
 test_script:
-  - tinuous --help
+  - $HOME/venv$PY/bin/tinuous --help
