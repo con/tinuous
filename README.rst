@@ -20,6 +20,7 @@
 `GitHub <https://github.com/con/tinuous>`_
 | `PyPI <https://pypi.org/project/tinuous/>`_
 | `Issues <https://github.com/con/tinuous/issues>`_
+| `Changelog <https://github.com/con/tinuous/blob/master/CHANGELOG.md>`_
 
 ``tinuous`` is a command for downloading build logs for a GitHub repository
 from GitHub Actions, Travis-CI.com, and/or Appveyor.
