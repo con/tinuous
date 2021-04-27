@@ -35,6 +35,20 @@ from yaml import safe_load
 
 log = logging.getLogger("tinuous")
 
+COMMON_STATUS_MAP = {
+    "success": "success",
+    "passed": "success",
+    "failure": "failed",
+    "failed": "failed",
+    "errored": "errored",
+    "timed_out": "errored",
+    "neutral": "incomplete",
+    "action_required": "incomplete",
+    "cancelled": "incomplete",
+    "skipped": "incomplete",
+    "stale": "incomplete",
+    # Error on unknown so we're forced to categorize them.
+}
 
 class EventType(Enum):
     CRON = "cron"
@@ -110,6 +124,7 @@ class BuildLog:
             "commit": self.commit,
             "number": str(self.number),
             "status": self.status,
+            "common_status": COMMON_STATUS_MAP[self.status],
         }
 
     def download(self, path_template: str) -> List[Path]:

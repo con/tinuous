@@ -189,37 +189,40 @@ file for the corresponding CI system.  A template string is a filepath
 containing placeholders of the form ``{field}``, where the available
 placeholders are:
 
-==============  ===============================================================
-Placeholder     Definition
-==============  ===============================================================
-``{year}``      The four-digit year in which the build was started
-``{month}``     The two-digit month in which the build was started
-``{day}``       The two-digit day in which the build was started
-``{hour}``      The two-digit hour at which the build was started
-``{minute}``    The two-digit minute at which the build was started
-``{second}``    The two-digit second at which the build was started
-``{ci}``        The name of the CI system (``github``, ``travis``, or
-                ``appveyor``)
-``{type}``      The event type that triggered the build (``cron``, ``pr``, or
-                ``push``)
-``{type_id}``   Further information on the triggering event; for ``cron``, this
-                is a timestamp for the start of the build; for ``pr``, this is
-                the number of the associated pull request, or ``UNK`` if it
-                cannot be determined; for ``push``, this is the name of the
-                branch to which the push was made (or possibly the tag that was
-                pushed, if using Appveyor)
-``{commit}``    The hash of the commit the build ran against
-``{number}``    The run number of the workflow run (GitHub) or the build number
-                (Travis and Appveyor)
-``{status}``    The success status of the build; the exact strings used depend
-                on the CI system
-``{wf_name}``   *(GitHub only)* The name of the workflow
-``{wf_file}``   *(GitHub only)* The basename of the workflow file (including
-                the file extension)
-``{run_id}``    *(GitHub only)* The unique ID of the workflow run
-``{job}``       *(Travis and Appveyor only)* The number of the job, without the
-                build number prefix (Travis) or the job ID string (Appveyor)
-==============  ===============================================================
+===================  ==========================================================
+Placeholder          Definition
+===================  ==========================================================
+``{year}``           The four-digit year in which the build was started
+``{month}``          The two-digit month in which the build was started
+``{day}``            The two-digit day in which the build was started
+``{hour}``           The two-digit hour at which the build was started
+``{minute}``         The two-digit minute at which the build was started
+``{second}``         The two-digit second at which the build was started
+``{ci}``             The name of the CI system (``github``, ``travis``, or
+                     ``appveyor``)
+``{type}``           The event type that triggered the build (``cron``, ``pr``,
+                     or ``push``)
+``{type_id}``        Further information on the triggering event; for ``cron``,
+                     this is a timestamp for the start of the build; for
+                     ``pr``, this is the number of the associated pull request,
+                     or ``UNK`` if it cannot be determined; for ``push``, this
+                     is the name of the branch to which the push was made (or
+                     possibly the tag that was pushed, if using Appveyor)
+``{commit}``         The hash of the commit the build ran against
+``{number}``         The run number of the workflow run (GitHub) or the build
+                     number (Travis and Appveyor)
+``{status}``         The success status of the build; the exact strings used
+                     depend on the CI system
+``{common_status}``  The success status of the build, normalized into one of
+                     ``success``, ``failed``, ``errored``, or ``incomplete``
+``{wf_name}``        *(GitHub only)* The name of the workflow
+``{wf_file}``        *(GitHub only)* The basename of the workflow file
+                     (including the file extension)
+``{run_id}``         *(GitHub only)* The unique ID of the workflow run
+``{job}``            *(Travis and Appveyor only)* The number of the job,
+                     without the build number prefix (Travis) or the job ID
+                     string (Appveyor)
+===================  ==========================================================
 
 All timestamps and timestamp components are in UTC.
 
