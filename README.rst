@@ -211,10 +211,12 @@ Placeholder          Definition
 ``{commit}``         The hash of the commit the build ran against
 ``{number}``         The run number of the workflow run (GitHub) or the build
                      number (Travis and Appveyor)
-``{status}``         The success status of the build; the exact strings used
-                     depend on the CI system
-``{common_status}``  The success status of the build, normalized into one of
-                     ``success``, ``failed``, ``errored``, or ``incomplete``
+``{status}``         The success status of the workflow run (GitHub) or job
+                     (Travis and Appveyor); the exact strings used depend on
+                     the CI system
+``{common_status}``  The success status of the workflow run or job, normalized
+                     into one of ``success``, ``failed``, ``errored``, or
+                     ``incomplete``
 ``{wf_name}``        *(GitHub only)* The name of the workflow
 ``{wf_file}``        *(GitHub only)* The basename of the workflow file
                      (including the file extension)
