@@ -649,6 +649,7 @@ class DataladConfig(NoExtraModel):
 
 class Config(NoExtraModel):
     repo: str
+    path_prefix: Optional[str] = None
     ci: CIConfigDict
     since: datetime
     types: List[EventType]
@@ -666,6 +667,13 @@ class Config(NoExtraModel):
     def _validate_since(cls, v: datetime) -> datetime:  # noqa: B902
         if v.tzinfo is None:
             raise ValueError("'since' timestamp must include timezone offset")
+        return v
+
+    @validator("ci")
+    def _validate_ci(cls, v: CIConfigDict, values: Dict[str, Any]) -> CIConfigDict:
+        if values.get("path_prefix") is not None:
+            for _, cicfg in v.items():
+                cicfg.path = values["path_prefix"] + cicfg.path
         return v
 
 
