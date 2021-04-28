@@ -115,10 +115,11 @@ keys:
             See "`Path Templates`_" for more information.
 
         ``workflows``
-            A list of the filenames for the workflows for which to retrieve
-            logs.  The filenames should only consist of the workflow basenames,
-            including the file extension (e.g., ``test.yml``, not
-            ``.github/workflows/test.yml``).
+            *(optional)* A list of the filenames for the workflows for which to
+            retrieve logs.  The filenames should only consist of the workflow
+            basenames, including the file extension (e.g., ``test.yml``, not
+            ``.github/workflows/test.yml``).  When ``workflows`` is not
+            specified, logs are retrieved for all workflows in the repository.
 
     ``travis``
         Configuration for retrieving logs from Travis-CI.com.  Subfield:

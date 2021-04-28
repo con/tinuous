@@ -37,6 +37,7 @@ COMMON_STATUS_MAP = {
     "failed": "failed",
     "errored": "errored",
     "timed_out": "errored",
+    "startup_failure": "errored",
     "neutral": "incomplete",
     "action_required": "incomplete",
     "cancelled": "incomplete",
@@ -135,7 +136,7 @@ class BuildLog:
 
 @dataclass
 class GitHubActions(CISystem):
-    workflows: List[str]
+    workflows: Optional[List[str]]
 
     @staticmethod
     def get_auth_token() -> str:
@@ -164,12 +165,18 @@ class GitHubActions(CISystem):
         s.headers["Authorization"] = f"token {self.token}"
         return s
 
+    def get_workflows(self) -> Iterator[Workflow]:
+        repo = self.client.get_repo(self.repo)
+        if self.workflows is None:
+            yield from repo.get_workflows()
+        else:
+            for wffile in self.workflows:
+                yield repo.get_workflow(wffile)
+
     def get_build_logs(self, event_types: List[EventType]) -> Iterator["GHABuildLog"]:
         log.info("Fetching runs newer than %s", self.since)
-        repo = self.client.get_repo(self.repo)
-        for wffile in self.workflows:
-            wf = repo.get_workflow(wffile)
-            log.info("Fetching runs for workflow %s (%s)", wffile, wf.name)
+        for wf in self.get_workflows():
+            log.info("Fetching runs for workflow %s (%s)", wf.path, wf.name)
             for run in wf.get_runs():  # type: ignore[call-arg]
                 # <https://github.com/PyGithub/PyGithub/pull/1857>
                 run_event = EventType.from_gh_event(run.event)
@@ -263,6 +270,11 @@ class GHABuildLog(BuildLog):
             path,
         )
         r = self.session.get(self.logs_url)
+        if r.status_code == 404:
+            # This can happen when a workflow failed to run due to, say, a
+            # syntax error.
+            log.error("Request for logs returned 404; skipping")
+            return []
         r.raise_for_status()
         try:
             with BytesIO(r.content) as blob, ZipFile(blob) as zf:
@@ -582,7 +594,7 @@ class CIConfig(NoExtraModel, ABC):
 
 
 class GitHubConfig(CIConfig):
-    workflows: List[str]
+    workflows: Optional[List[str]] = None
 
     @staticmethod
     def get_auth_token() -> str:
