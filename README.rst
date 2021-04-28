@@ -97,6 +97,10 @@ keys:
 ``repo``
     The GitHub repository to retrieve logs for, in the form ``OWNER/NAME``
 
+``path_prefix``
+    *(optional)* A common prefix (possibly including path template
+    placeholders) to prepend to the ``path`` fields of all ``ci`` entries
+
 ``ci``
     A mapping from the names of the CI systems from which to retrieve logs to
     sub-mappings containing CI-specific configuration.  Including a given CI
@@ -209,17 +213,18 @@ A sample config file:
 .. code:: yaml
 
     repo: datalad/datalad
+    path_prefix: '{year}/{month}/{day}/{ci}/{type}/{type_id}/{commit[:8]}/'
     ci:
       github:
-        path: '{year}/{month}/{day}/{ci}/{type}/{type_id}/{commit}/{wf_name}/{number}/'
+        path: '{wf_name}/{number}/'
         workflows:
           - test_crippled.yml
           - test_extensions.yml
           - test_macos.yml
       travis:
-        path: '{year}/{month}/{day}/{ci}/{type}/{type_id}/{commit}/{number}/{job}.txt'
+        path: '{number}/{job}.txt'
       appveyor:
-        path: '{year}/{month}/{day}/{ci}/{type}/{type_id}/{commit}/{number}/{job}.txt'
+        path: '{number}/{job}.txt'
         accountName: mih
         projectSlug: datalad
     since: 2021-01-20T00:00:00Z
