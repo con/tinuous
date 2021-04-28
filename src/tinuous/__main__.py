@@ -224,7 +224,9 @@ class GHABuildLog(BuildLog):
                 # matching PR instead.
                 try:
                     event_id = client.search_issues(
-                        f"repo:{run.repository.full_name} {run.head_sha}"
+                        f"repo:{run.repository.full_name} is:pr {run.head_sha}",
+                        sort="created",
+                        order="asc",
                     )[0].number
                 except IndexError:
                     event_id = "UNK"
