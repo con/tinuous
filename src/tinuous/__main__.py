@@ -37,6 +37,7 @@ COMMON_STATUS_MAP = {
     "failed": "failed",
     "errored": "errored",
     "timed_out": "errored",
+    "startup_failure": "errored",
     "neutral": "incomplete",
     "action_required": "incomplete",
     "cancelled": "incomplete",
@@ -269,6 +270,11 @@ class GHABuildLog(BuildLog):
             path,
         )
         r = self.session.get(self.logs_url)
+        if r.status_code == 404:
+            # This can happen when a workflow failed to run due to, say, a
+            # syntax error.
+            log.error("Request for logs returned 404; skipping")
+            return []
         r.raise_for_status()
         try:
             with BytesIO(r.content) as blob, ZipFile(blob) as zf:
