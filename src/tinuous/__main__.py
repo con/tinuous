@@ -190,7 +190,9 @@ class GitHubActions(CISystem):
                     log.info("Found run %s", run.run_number)
                     self.register_build(ts, True)
                     if run_event in event_types:
-                        yield GHABuildLog.from_workflow_run(self.dl_session, wf, run)
+                        yield GHABuildLog.from_workflow_run(
+                            self.client, self.dl_session, wf, run
+                        )
                     else:
                         log.info("Event type is %r; skipping", run.event)
 
@@ -206,6 +208,7 @@ class GHABuildLog(BuildLog):
     @classmethod
     def from_workflow_run(
         cls,
+        client: Github,
         session: requests.Session,
         workflow: Workflow,
         run: WorkflowRun,
@@ -222,7 +225,18 @@ class GHABuildLog(BuildLog):
             if run.pull_requests:
                 event_id = str(run.pull_requests[0].number)
             else:
-                event_id = "UNK"
+                # The experimental "List pull requests associated with a
+                # commit" endpoint does not return data reliably enough to be
+                # worth using, so we have to do an issue search for the
+                # matching PR instead.
+                try:
+                    event_id = client.search_issues(
+                        f"repo:{run.repository.full_name} is:pr {run.head_sha}",
+                        sort="created",
+                        order="asc",
+                    )[0].number
+                except IndexError:
+                    event_id = "UNK"
         else:
             raise AssertionError(f"Unhandled EventType: {run_event!r}")
         return cls(
