@@ -122,6 +122,7 @@ class BuildLog:
             "type": self.event_type.value,
             "type_id": self.event_id,
             "commit": self.commit,
+            "abbrev_commit": self.commit[:7],
             "number": str(self.number),
             "status": self.status,
             "common_status": COMMON_STATUS_MAP[self.status],

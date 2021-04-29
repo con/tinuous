@@ -213,7 +213,7 @@ A sample config file:
 .. code:: yaml
 
     repo: datalad/datalad
-    path_prefix: '{year}/{month}/{day}/{ci}/{type}/{type_id}/{commit[:8]}/'
+    path_prefix: '{year}/{month}/{day}/{ci}/{type}/{type_id}/{commit}/'
     ci:
       github:
         path: '{wf_name}/{number}/'
@@ -269,6 +269,7 @@ Placeholder          Definition
                      is the name of the branch to which the push was made (or
                      possibly the tag that was pushed, if using Appveyor)
 ``{commit}``         The hash of the commit the build ran against
+``{abbrev_commit}``  The first seven characters of the commit hash
 ``{number}``         The run number of the workflow run (GitHub) or the build
                      number (Travis and Appveyor)
 ``{status}``         The success status of the workflow run (GitHub) or job
