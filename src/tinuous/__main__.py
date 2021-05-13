@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 from shutil import rmtree
+from string import Template
 import subprocess
 from typing import Any, Dict, Iterator, List, Match, Optional, Pattern, Tuple
 from urllib.parse import quote
@@ -128,8 +129,9 @@ class BuildLog:
             "common_status": COMMON_STATUS_MAP[self.status],
         }
 
-    def expand_path(self, path_template: str) -> str:
-        return path_template.format_map(self.path_fields())
+    def expand_path(self, path_template: str, vars: Dict[str, str]) -> str:
+        template2 = Template(path_template).substitute(vars)
+        return template2.format_map(self.path_fields())
 
     def download(self, path: Path) -> List[Path]:
         raise NotImplementedError
@@ -676,7 +678,7 @@ class DataladConfig(NoExtraModel):
 
 class Config(NoExtraModel):
     repo: str
-    path_prefix: Optional[str] = None
+    vars: Dict[str, str] = Field(default_factory=dict)
     ci: CIConfigDict
     since: datetime
     types: List[EventType]
@@ -694,13 +696,6 @@ class Config(NoExtraModel):
     def _validate_since(cls, v: datetime) -> datetime:  # noqa: B902
         if v.tzinfo is None:
             raise ValueError("'since' timestamp must include timezone offset")
-        return v
-
-    @validator("ci")
-    def _validate_ci(cls, v: CIConfigDict, values: Dict[str, Any]) -> CIConfigDict:
-        if values.get("path_prefix") is not None:
-            for _, cicfg in v.items():
-                cicfg.path = values["path_prefix"] + cicfg.path
         return v
 
 
@@ -774,7 +769,7 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
             since = cfg.since
         ci = cicfg.get_system(repo=cfg.repo, since=since, token=tokens[name])
         for bl in ci.get_build_logs(cfg.types):
-            path = bl.expand_path(cicfg.path)
+            path = bl.expand_path(cicfg.path, cfg.vars)
             if cfg.datalad.enabled:
                 dspaths = path.split("//")
                 if "" in dspaths:
