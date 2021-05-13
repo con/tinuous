@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from functools import cached_property
@@ -74,20 +73,20 @@ class EventType(Enum):
         }.get(travis_event)
 
 
-# We can't make this an ABC due to <https://github.com/python/mypy/issues/5374>
-@dataclass
-class CISystem:
+class CISystem(ABC, BaseModel):
     repo: str
-    token: str = field(repr=False)
+    token: str
     since: datetime
-    fetched: List[Tuple[datetime, bool]] = field(init=False, default_factory=list)
+    fetched: List[Tuple[datetime, bool]] = Field(default_factory=list)
 
     @staticmethod
+    @abstractmethod
     def get_auth_token() -> str:
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def get_build_logs(self, event_types: List[EventType]) -> Iterator["BuildLog"]:
-        raise NotImplementedError
+        ...
 
     def register_build(self, ts: datetime, processed: bool) -> None:
         heapq.heappush(self.fetched, (ts, processed))
@@ -102,9 +101,7 @@ class CISystem:
         return prev_ts
 
 
-# We can't make this an ABC due to <https://github.com/python/mypy/issues/5374>
-@dataclass
-class BuildLog:
+class BuildLog(ABC, BaseModel):
     created_at: datetime
     event_type: EventType
     event_id: str
@@ -133,11 +130,11 @@ class BuildLog:
     def expand_path(self, path_template: str, vars: Dict[str, str]) -> str:
         return expand_template(path_template, self.path_fields(), vars)
 
+    @abstractmethod
     def download(self, path: Path) -> List[Path]:
-        raise NotImplementedError
+        ...
 
 
-@dataclass
 class GitHubActions(CISystem):
     workflows: Optional[List[str]]
 
@@ -200,7 +197,6 @@ class GitHubActions(CISystem):
                         log.info("Event type is %r; skipping", run.event)
 
 
-@dataclass
 class GHABuildLog(BuildLog):
     session: requests.Session
     logs_url: str
@@ -386,7 +382,6 @@ class Travis(CISystem):
                     log.info("Event type is %r; skipping", build["event_type"])
 
 
-@dataclass
 class TravisJobLog(BuildLog):
     client: Travis
     job: str
@@ -455,7 +450,6 @@ class TravisJobLog(BuildLog):
         return [path]
 
 
-@dataclass
 class Appveyor(CISystem):
     accountName: str
     projectSlug: Optional[str]
@@ -530,7 +524,6 @@ class Appveyor(CISystem):
                     log.info("Event type is %r; skipping", run_event.value)
 
 
-@dataclass
 class AppveyorJobLog(BuildLog):
     client: Appveyor
     job: str
