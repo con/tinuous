@@ -97,9 +97,12 @@ keys:
 ``repo``
     The GitHub repository to retrieve logs for, in the form ``OWNER/NAME``
 
-``path_prefix``
-    *(optional)* A common prefix (possibly including path template
-    placeholders) to prepend to the ``path`` fields of all ``ci`` entries
+``vars``
+    *(optional)* A mapping defining custom path template placeholders.  Each
+    key is the name of a custom placeholder, without enclosing braces, and the
+    value is the string to substitute in its place.  Custom values may contain
+    standard path template placeholders as well as other custom placeholders
+    defined earlier in the mapping.
 
 ``ci``
     A mapping from the names of the CI systems from which to retrieve logs to
@@ -213,18 +216,19 @@ A sample config file:
 .. code:: yaml
 
     repo: datalad/datalad
-    path_prefix: '{year}/{month}/{day}/{ci}/{type}/{type_id}/{commit}/'
+    vars:
+      path_prefix: '{year}/{month}/{day}/{ci}/{type}/{type_id}/{commit}'
     ci:
       github:
-        path: '{wf_name}/{number}/'
+        path: '{path_prefix}/{wf_name}/{number}/'
         workflows:
           - test_crippled.yml
           - test_extensions.yml
           - test_macos.yml
       travis:
-        path: '{number}/{job}.txt'
+        path: '{path_prefix}/{number}/{job}.txt'
       appveyor:
-        path: '{number}/{job}.txt'
+        path: '{path_prefix}/{number}/{job}.txt'
         accountName: mih
         projectSlug: datalad
     since: 2021-01-20T00:00:00Z
@@ -288,6 +292,9 @@ Placeholder          Definition
 ===================  ==========================================================
 
 All timestamps and timestamp components are in UTC.
+
+Path templates may also contain custom placeholders defined in the top-level
+``vars`` mapping of the configuration.
 
 Authentication
 --------------

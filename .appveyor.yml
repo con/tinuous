@@ -3,13 +3,19 @@ image: Ubuntu
 environment:
   matrix:
     - PY: '3.8'
+      TOXENV: py
     - PY: '3.9'
+      TOXENV: py
+    - PY: '3.8'
+      TOXENV: lint
+    - PY: '3.8'
+      TOXENV: typing
 
 build: off
 
 install:
   - $HOME/venv$PY/bin/python -m pip install --upgrade pip wheel
-  - $HOME/venv$PY/bin/python -m pip install .
+  - $HOME/venv$PY/bin/python -m pip install --upgrade --upgrade-strategy=eager tox
 
 test_script:
-  - $HOME/venv$PY/bin/tinuous --help
+  - $HOME/venv$PY/bin/tox

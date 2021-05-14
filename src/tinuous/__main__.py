@@ -28,6 +28,8 @@ from pydantic import BaseModel, Field, validator
 import requests
 from yaml import safe_load
 
+from .util import expand_template
+
 log = logging.getLogger("tinuous")
 
 COMMON_STATUS_MAP = {
@@ -128,8 +130,8 @@ class BuildLog:
             "common_status": COMMON_STATUS_MAP[self.status],
         }
 
-    def expand_path(self, path_template: str) -> str:
-        return path_template.format_map(self.path_fields())
+    def expand_path(self, path_template: str, vars: Dict[str, str]) -> str:
+        return expand_template(path_template, self.path_fields(), vars)
 
     def download(self, path: Path) -> List[Path]:
         raise NotImplementedError
@@ -676,7 +678,7 @@ class DataladConfig(NoExtraModel):
 
 class Config(NoExtraModel):
     repo: str
-    path_prefix: Optional[str] = None
+    vars: Dict[str, str] = Field(default_factory=dict)
     ci: CIConfigDict
     since: datetime
     types: List[EventType]
@@ -685,22 +687,15 @@ class Config(NoExtraModel):
     datalad: DataladConfig = Field(default_factory=DataladConfig)
 
     @validator("repo")
-    def _validate_repo(cls, v: str) -> str:  # noqa: B902
+    def _validate_repo(cls, v: str) -> str:  # noqa: B902, U100
         if not re.fullmatch(r"[^/]+/[^/]+", v):
             raise ValueError("Repo must be in the form 'OWNER/NAME'")
         return v
 
     @validator("since")
-    def _validate_since(cls, v: datetime) -> datetime:  # noqa: B902
+    def _validate_since(cls, v: datetime) -> datetime:  # noqa: B902, U100
         if v.tzinfo is None:
             raise ValueError("'since' timestamp must include timezone offset")
-        return v
-
-    @validator("ci")
-    def _validate_ci(cls, v: CIConfigDict, values: Dict[str, Any]) -> CIConfigDict:
-        if values.get("path_prefix") is not None:
-            for _, cicfg in v.items():
-                cicfg.path = values["path_prefix"] + cicfg.path
         return v
 
 
@@ -774,7 +769,7 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
             since = cfg.since
         ci = cicfg.get_system(repo=cfg.repo, since=since, token=tokens[name])
         for bl in ci.get_build_logs(cfg.types):
-            path = bl.expand_path(cicfg.path)
+            path = bl.expand_path(cicfg.path, cfg.vars)
             if cfg.datalad.enabled:
                 dspaths = path.split("//")
                 if "" in dspaths:
