@@ -11,7 +11,6 @@ import os
 from pathlib import Path
 import re
 from shutil import rmtree
-from string import Template
 import subprocess
 from typing import Any, Dict, Iterator, List, Match, Optional, Pattern, Tuple
 from urllib.parse import quote
@@ -130,8 +129,11 @@ class BuildLog:
         }
 
     def expand_path(self, path_template: str, vars: Dict[str, str]) -> str:
-        template2 = Template(path_template).substitute(vars)
-        return template2.format_map(self.path_fields())
+        fields = self.path_fields()
+        expanded_vars: Dict[str, str] = {}
+        for name, template in vars.items():
+            expanded_vars[name] = template.format(**fields, **expanded_vars)
+        return path_template.format(**fields, **expanded_vars)
 
     def download(self, path: Path) -> List[Path]:
         raise NotImplementedError

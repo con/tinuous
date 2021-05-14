@@ -98,10 +98,11 @@ keys:
     The GitHub repository to retrieve logs for, in the form ``OWNER/NAME``
 
 ``vars``
-    *(optional)* A mapping defining variables for use in path templates.
-    Variable values may contain path template placeholders but not other
-    variables.  A variable ``foo`` can be inserted into a path template by
-    writing either ``$foo`` or ``${foo}``.
+    *(optional)* A mapping defining custom path template placeholders.  Each
+    key is the name of a custom placeholder, without enclosing braces, and the
+    value is the string to substitute in its place.  Custom values may contain
+    standard path template placeholders as well as other custom placeholders
+    defined earlier in the mapping.
 
 ``ci``
     A mapping from the names of the CI systems from which to retrieve logs to
@@ -219,15 +220,15 @@ A sample config file:
       path_prefix: '{year}/{month}/{day}/{ci}/{type}/{type_id}/{commit}'
     ci:
       github:
-        path: '$path_prefix/{wf_name}/{number}/'
+        path: '{path_prefix}/{wf_name}/{number}/'
         workflows:
           - test_crippled.yml
           - test_extensions.yml
           - test_macos.yml
       travis:
-        path: '$path_prefix/{number}/{job}.txt'
+        path: '{path_prefix}/{number}/{job}.txt'
       appveyor:
-        path: '$path_prefix/{number}/{job}.txt'
+        path: '{path_prefix}/{number}/{job}.txt'
         accountName: mih
         projectSlug: datalad
     since: 2021-01-20T00:00:00Z
@@ -292,10 +293,8 @@ Placeholder          Definition
 
 All timestamps and timestamp components are in UTC.
 
-Path templates may also contain variables defined in the top-level ``vars``
-key; such variables are written as ``$varname`` or ``${varname}``.  As variable
-definitions can contain path template placeholders, this can be used to define,
-say, common prefixes for path templates.
+Path templates may also contain custom placeholders defined in the top-level
+``vars`` mapping of the configuration.
 
 Authentication
 --------------
