@@ -28,6 +28,8 @@ from pydantic import BaseModel, Field, validator
 import requests
 from yaml import safe_load
 
+from .util import expand_template
+
 log = logging.getLogger("tinuous")
 
 COMMON_STATUS_MAP = {
@@ -129,11 +131,7 @@ class BuildLog:
         }
 
     def expand_path(self, path_template: str, vars: Dict[str, str]) -> str:
-        fields = self.path_fields()
-        expanded_vars: Dict[str, str] = {}
-        for name, template in vars.items():
-            expanded_vars[name] = template.format(**fields, **expanded_vars)
-        return path_template.format(**fields, **expanded_vars)
+        return expand_template(path_template, self.path_fields(), vars)
 
     def download(self, path: Path) -> List[Path]:
         raise NotImplementedError
@@ -689,13 +687,13 @@ class Config(NoExtraModel):
     datalad: DataladConfig = Field(default_factory=DataladConfig)
 
     @validator("repo")
-    def _validate_repo(cls, v: str) -> str:  # noqa: B902
+    def _validate_repo(cls, v: str) -> str:  # noqa: B902, U100
         if not re.fullmatch(r"[^/]+/[^/]+", v):
             raise ValueError("Repo must be in the form 'OWNER/NAME'")
         return v
 
     @validator("since")
-    def _validate_since(cls, v: datetime) -> datetime:  # noqa: B902
+    def _validate_since(cls, v: datetime) -> datetime:  # noqa: B902, U100
         if v.tzinfo is None:
             raise ValueError("'since' timestamp must include timezone offset")
         return v
