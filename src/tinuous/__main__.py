@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from collections import deque
 from datetime import datetime, timezone
 from enum import Enum
 from functools import cached_property
@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 from shutil import rmtree
 import subprocess
+import tempfile
 from typing import Any, Dict, Iterator, List, Match, Optional, Pattern, Tuple
 from urllib.parse import quote
 from zipfile import ZipFile
@@ -74,20 +75,22 @@ class EventType(Enum):
         }.get(travis_event)
 
 
-# We can't make this an ABC due to <https://github.com/python/mypy/issues/5374>
-@dataclass
-class CISystem:
+class CISystem(ABC, BaseModel):
     repo: str
-    token: str = field(repr=False)
+    token: str
     since: datetime
-    fetched: List[Tuple[datetime, bool]] = field(init=False, default_factory=list)
+    fetched: List[Tuple[datetime, bool]] = Field(default_factory=list)
 
     @staticmethod
+    @abstractmethod
     def get_auth_token() -> str:
-        raise NotImplementedError
+        ...
 
-    def get_build_logs(self, event_types: List[EventType]) -> Iterator["BuildLog"]:
-        raise NotImplementedError
+    @abstractmethod
+    def get_assets(
+        self, event_types: List[EventType], artifacts: bool = False
+    ) -> Iterator["Asset"]:
+        ...
 
     def register_build(self, ts: datetime, processed: bool) -> None:
         heapq.heappush(self.fetched, (ts, processed))
@@ -101,10 +104,13 @@ class CISystem:
             prev_ts = ts
         return prev_ts
 
+    class Config:
+        # <https://github.com/samuelcolvin/pydantic/issues/1241>
+        arbitrary_types_allowed = True
+        keep_untouched = (cached_property,)
 
-# We can't make this an ABC due to <https://github.com/python/mypy/issues/5374>
-@dataclass
-class BuildLog:
+
+class Asset(ABC, BaseModel):
     created_at: datetime
     event_type: EventType
     event_id: str
@@ -133,13 +139,21 @@ class BuildLog:
     def expand_path(self, path_template: str, vars: Dict[str, str]) -> str:
         return expand_template(path_template, self.path_fields(), vars)
 
+    @abstractmethod
     def download(self, path: Path) -> List[Path]:
-        raise NotImplementedError
+        ...
 
 
-@dataclass
+class BuildLog(Asset):
+    pass
+
+
+class Artifact(Asset):
+    pass
+
+
 class GitHubActions(CISystem):
-    workflows: Optional[List[str]]
+    workflows: Optional[List[str]] = None
 
     @staticmethod
     def get_auth_token() -> str:
@@ -176,12 +190,13 @@ class GitHubActions(CISystem):
             for wffile in self.workflows:
                 yield repo.get_workflow(wffile)
 
-    def get_build_logs(self, event_types: List[EventType]) -> Iterator["GHABuildLog"]:
+    def get_assets(
+        self, event_types: List[EventType], artifacts: bool = False
+    ) -> Iterator["Asset"]:
         log.info("Fetching runs newer than %s", self.since)
         for wf in self.get_workflows():
             log.info("Fetching runs for workflow %s (%s)", wf.path, wf.name)
-            for run in wf.get_runs():  # type: ignore[call-arg]
-                # <https://github.com/PyGithub/PyGithub/pull/1857>
+            for run in wf.get_runs():
                 run_event = EventType.from_gh_event(run.event)
                 ts = ensure_aware(run.created_at)
                 if ts <= self.since:
@@ -193,68 +208,71 @@ class GitHubActions(CISystem):
                     log.info("Found run %s", run.run_number)
                     self.register_build(ts, True)
                     if run_event in event_types:
+                        event_id = self.get_event_id(run, run_event)
                         yield GHABuildLog.from_workflow_run(
-                            self.client, self.dl_session, wf, run
+                            self.dl_session, wf, run, run_event, event_id
                         )
+                        if artifacts:
+                            for name, download_url in self.get_artifacts(run):
+                                yield GHAArtifact.from_workflow_run(
+                                    self.dl_session,
+                                    wf,
+                                    run,
+                                    run_event,
+                                    event_id,
+                                    name,
+                                    download_url,
+                                )
                     else:
                         log.info("Event type is %r; skipping", run.event)
 
-
-@dataclass
-class GHABuildLog(BuildLog):
-    session: requests.Session
-    logs_url: str
-    workflow_name: str
-    workflow_file: str
-    run_id: int
-
-    @classmethod
-    def from_workflow_run(
-        cls,
-        client: Github,
-        session: requests.Session,
-        workflow: Workflow,
-        run: WorkflowRun,
-    ) -> "GHABuildLog":
-        run_event = EventType.from_gh_event(run.event)
-        if run_event is None:
-            raise ValueError(f"Run has unknown event type {run.event!r}")
-        event_id: str
-        if run_event is EventType.CRON:
-            event_id = ensure_aware(run.created_at).strftime("%Y%m%dT%H%M%S")
-        elif run_event is EventType.PUSH:
-            event_id = run.head_branch
-        elif run_event is EventType.PULL_REQUEST:
+    def get_event_id(self, run: WorkflowRun, event_type: EventType) -> str:
+        if event_type is EventType.CRON:
+            return ensure_aware(run.created_at).strftime("%Y%m%dT%H%M%S")
+        elif event_type is EventType.PUSH:
+            return run.head_branch
+        elif event_type is EventType.PULL_REQUEST:
             if run.pull_requests:
-                event_id = str(run.pull_requests[0].number)
+                return str(run.pull_requests[0].number)
             else:
                 # The experimental "List pull requests associated with a
                 # commit" endpoint does not return data reliably enough to be
                 # worth using, so we have to do an issue search for the
                 # matching PR instead.
                 try:
-                    event_id = client.search_issues(
-                        f"repo:{run.repository.full_name} is:pr {run.head_sha}",
-                        sort="created",
-                        order="asc",
-                    )[0].number
+                    return str(
+                        self.client.search_issues(
+                            f"repo:{run.repository.full_name} is:pr {run.head_sha}",
+                            sort="created",
+                            order="asc",
+                        )[0].number
+                    )
                 except IndexError:
-                    event_id = "UNK"
+                    return "UNK"
         else:
-            raise AssertionError(f"Unhandled EventType: {run_event!r}")
-        return cls(
-            session=session,
-            logs_url=run.logs_url,
-            created_at=ensure_aware(run.created_at),
-            event_type=run_event,
-            event_id=event_id,
-            commit=run.head_sha,
-            workflow_name=workflow.name,
-            workflow_file=workflow.path.split("/")[-1],
-            number=run.run_number,
-            run_id=run.id,
-            status=run.conclusion,
-        )
+            raise AssertionError(f"Unhandled EventType: {event_type!r}")
+
+    def get_artifacts(self, run: WorkflowRun) -> Iterator[Tuple[str, str]]:
+        """ Yields each artifact as a (name, download_url) pair """
+        url = run.artifacts_url
+        while url is not None:
+            r = self.dl_session.get(url)
+            r.raise_for_status()
+            for artifact in r.json()["artifacts"]:
+                if not artifact["expired"]:
+                    yield (artifact["name"], artifact["archive_download_url"])
+            url = r.links.get("next", {}).get("url")
+
+
+class GHAAsset(Asset):
+    session: requests.Session
+    workflow_name: str
+    workflow_file: str
+    run_id: int
+
+    class Config:
+        # To allow requests.Session:
+        arbitrary_types_allowed = True
 
     def path_fields(self) -> Dict[str, str]:
         fields = super().path_fields()
@@ -267,6 +285,33 @@ class GHABuildLog(BuildLog):
             }
         )
         return fields
+
+
+class GHABuildLog(GHAAsset, BuildLog):
+    logs_url: str
+
+    @classmethod
+    def from_workflow_run(
+        cls,
+        session: requests.Session,
+        workflow: Workflow,
+        run: WorkflowRun,
+        event_type: EventType,
+        event_id: str,
+    ) -> "GHABuildLog":
+        return cls(
+            session=session,
+            logs_url=run.logs_url,
+            created_at=ensure_aware(run.created_at),
+            event_type=event_type,
+            event_id=event_id,
+            commit=run.head_sha,
+            workflow_name=workflow.name,
+            workflow_file=workflow.path.split("/")[-1],
+            number=run.run_number,
+            run_id=run.id,
+            status=run.conclusion,
+        )
 
     def download(self, path: Path) -> List[Path]:
         path.mkdir(parents=True, exist_ok=True)
@@ -300,6 +345,75 @@ class GHABuildLog(BuildLog):
             rmtree(path)
             raise
         return list(path.rglob("*.txt"))
+
+
+class GHAArtifact(GHAAsset, Artifact):
+    name: str
+    download_url: str
+
+    @classmethod
+    def from_workflow_run(
+        cls,
+        session: requests.Session,
+        workflow: Workflow,
+        run: WorkflowRun,
+        event_type: EventType,
+        event_id: str,
+        name: str,
+        download_url: str,
+    ) -> "GHAArtifact":
+        return cls(
+            session=session,
+            created_at=ensure_aware(run.created_at),
+            event_type=event_type,
+            event_id=event_id,
+            commit=run.head_sha,
+            workflow_name=workflow.name,
+            workflow_file=workflow.path.split("/")[-1],
+            number=run.run_number,
+            run_id=run.id,
+            status=run.conclusion,
+            name=name,
+            download_url=download_url,
+        )
+
+    def download(self, path: Path) -> List[Path]:
+        target_dir = path / self.name
+        target_dir.mkdir(parents=True, exist_ok=True)
+        if any(target_dir.iterdir()):
+            log.info(
+                "Asset %s from %s (%s) #%s already downloaded to %s; skipping",
+                self.name,
+                self.workflow_file,
+                self.workflow_name,
+                self.number,
+                path,
+            )
+            return []
+        log.info(
+            "Downloading asset %s for %s (%s) #%s to %s",
+            self.name,
+            self.workflow_file,
+            self.workflow_name,
+            self.number,
+            path,
+        )
+        r = self.session.get(self.download_url, stream=True)
+        r.raise_for_status()
+        fd, fpath = tempfile.mkstemp()
+        os.close(fd)
+        zippath = Path(fpath)
+        try:
+            stream_to_file(r, zippath)
+            try:
+                with ZipFile(zippath) as zf:
+                    zf.extractall(target_dir)
+            except BaseException:
+                rmtree(target_dir)
+                raise
+        finally:
+            zippath.unlink(missing_ok=True)
+        return list(iterfiles(target_dir))
 
 
 class Travis(CISystem):
@@ -356,7 +470,9 @@ class Travis(CISystem):
                 break
             params = None
 
-    def get_build_logs(self, event_types: List[EventType]) -> Iterator["TravisJobLog"]:
+    def get_assets(
+        self, event_types: List[EventType], artifacts: bool = False  # noqa: U100
+    ) -> Iterator["Asset"]:
         log.info("Fetching builds newer than %s", self.since)
         for build in self.paginate(
             f"/repo/{quote(self.repo, safe='')}/builds",
@@ -386,7 +502,6 @@ class Travis(CISystem):
                     log.info("Event type is %r; skipping", build["event_type"])
 
 
-@dataclass
 class TravisJobLog(BuildLog):
     client: Travis
     job: str
@@ -455,7 +570,6 @@ class TravisJobLog(BuildLog):
         return [path]
 
 
-@dataclass
 class Appveyor(CISystem):
     accountName: str
     projectSlug: Optional[str]
@@ -502,9 +616,9 @@ class Appveyor(CISystem):
             else:
                 break
 
-    def get_build_logs(
-        self, event_types: List[EventType]
-    ) -> Iterator["AppveyorJobLog"]:
+    def get_assets(
+        self, event_types: List[EventType], artifacts: bool = False  # noqa: U100
+    ) -> Iterator["Asset"]:
         log.info("Fetching runs newer than %s", self.since)
         for build in self.get_builds():
             if build.get("pullRequestId"):
@@ -530,7 +644,6 @@ class Appveyor(CISystem):
                     log.info("Event type is %r; skipping", run_event.value)
 
 
-@dataclass
 class AppveyorJobLog(BuildLog):
     client: Appveyor
     job: str
@@ -611,6 +724,7 @@ class CIConfig(NoExtraModel, ABC):
 
 
 class GitHubConfig(CIConfig):
+    artifacts_path: Optional[str] = None
     workflows: Optional[List[str]] = None
 
     @staticmethod
@@ -760,16 +874,29 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
     ds = Dataset(os.curdir)
     if cfg.datalad.enabled and not ds.is_installed():
         ds.create(force=True, cfg_proc=cfg.datalad.cfg_proc)
-    added = 0
+    logs_added = 0
+    artifacts_added = 0
     for name, cicfg in cfg.ci.items():
-        log.info("Fetching logs from %s", name)
+        get_artifacts = getattr(cicfg, "artifacts_path", None) is not None
+        log.info(
+            "Fetching logs%s from %s", " and artifacts" if get_artifacts else "", name
+        )
         try:
             since = datetime.fromisoformat(since_stamps[name])
         except KeyError:
             since = cfg.since
         ci = cicfg.get_system(repo=cfg.repo, since=since, token=tokens[name])
-        for bl in ci.get_build_logs(cfg.types):
-            path = bl.expand_path(cicfg.path, cfg.vars)
+        for obj in ci.get_assets(cfg.types, artifacts=get_artifacts):
+            if isinstance(obj, BuildLog):
+                path = obj.expand_path(cicfg.path, cfg.vars)
+            elif isinstance(obj, Artifact):
+                assert get_artifacts
+                path = obj.expand_path(
+                    cicfg.artifacts_path,  # type: ignore[attr-defined]
+                    cfg.vars,
+                )
+            else:
+                raise AssertionError(f"Unexpected asset type {type(obj).__name__}")
             if cfg.datalad.enabled:
                 dspaths = path.split("//")
                 if "" in dspaths:
@@ -778,18 +905,26 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
                     dsp = "/".join(dspaths[:i])
                     if not Path(dsp).exists():
                         ds.create(dsp, cfg_proc=cfg.datalad.cfg_proc)
-            logs = bl.download(Path(path))
-            added += len(logs)
-            if sanitize_secrets and cfg.secrets:
-                for p in logs:
-                    sanitize(p, cfg.secrets, cfg.allow_secrets_regex)
+            paths = obj.download(Path(path))
+            if isinstance(obj, BuildLog):
+                logs_added += len(paths)
+                if sanitize_secrets and cfg.secrets:
+                    for p in paths:
+                        sanitize(p, cfg.secrets, cfg.allow_secrets_regex)
+            elif isinstance(obj, Artifact):
+                artifacts_added += len(paths)
         since_stamps[name] = ci.new_since().isoformat()
         log.debug("%s timestamp floor updated to %s", name, since_stamps[name])
     with open(state, "w") as fp:
         json.dump(since_stamps, fp)
-    log.info("%d logs downloaded", added)
-    if cfg.datalad.enabled and added:
-        ds.save(recursive=True, message=f"[tinuous] {added} logs added")
+    log.info("%d logs downloaded", logs_added)
+    if get_artifacts:
+        log.info("%d artifacts downloaded", artifacts_added)
+    if cfg.datalad.enabled and (logs_added or artifacts_added):
+        msg = f"[tinuous] {logs_added} logs added"
+        if get_artifacts:
+            msg += f", {artifacts_added} artifacts added"
+        ds.save(recursive=True, message=msg)
 
 
 @main.command("sanitize")
@@ -845,6 +980,17 @@ def sanitize(
                     log.info("Found %s secret on line %d", name, i)
                 line = newline
             fp.write(line)
+
+
+def iterfiles(dirpath: Path) -> Iterator[Path]:
+    dirs = deque([dirpath])
+    while dirs:
+        d = dirs.popleft()
+        for p in d.iterdir():
+            if p.is_dir():
+                dirs.append(p)
+            else:
+                yield p
 
 
 if __name__ == "__main__":
