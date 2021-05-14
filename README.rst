@@ -22,8 +22,9 @@
 | `Issues <https://github.com/con/tinuous/issues>`_
 | `Changelog <https://github.com/con/tinuous/blob/master/CHANGELOG.md>`_
 
-``tinuous`` is a command for downloading build logs for a GitHub repository
-from GitHub Actions, Travis-CI.com, and/or Appveyor.
+``tinuous`` is a command for downloading build logs and (for GitHub Actions
+only) artifacts for a GitHub repository from GitHub Actions, Travis-CI.com,
+and/or Appveyor.
 
 Installation
 ============
@@ -63,8 +64,8 @@ Global Options
     tinuous [<global options>] fetch [<options>]
 
 ``tinuous fetch`` reads a configuration file telling it what repository to
-retrieve logs for, where to retrieve them from, and where to save them, and
-then it carries those steps out.
+retrieve logs & artifacts for, where to retrieve them from, and where to save
+them, and then it carries those steps out.
 
 Options
 ~~~~~~~
@@ -73,7 +74,7 @@ Options
                                 downloading
 
 -S FILE, --state FILE           Store program state (e.g., timestamps before
-                                which all logs are known to have been fetched)
+                                which all asset are known to have been fetched)
                                 in the given file [default value:
                                 ``.dlstate.json``]
 
@@ -95,7 +96,7 @@ The configuration file is a YAML file containing a mapping with the following
 keys:
 
 ``repo``
-    The GitHub repository to retrieve logs for, in the form ``OWNER/NAME``
+    The GitHub repository to retrieve assets for, in the form ``OWNER/NAME``
 
 ``vars``
     *(optional)* A mapping defining custom path template placeholders.  Each
@@ -105,15 +106,15 @@ keys:
     defined earlier in the mapping.
 
 ``ci``
-    A mapping from the names of the CI systems from which to retrieve logs to
+    A mapping from the names of the CI systems from which to retrieve assets to
     sub-mappings containing CI-specific configuration.  Including a given CI
-    system is optional; logs will be fetched from a given system if & only if
+    system is optional; assets will be fetched from a given system if & only if
     it is listed in this mapping.
 
     The CI systems and their sub-mappings are as follows:
 
     ``github``
-        Configuration for retrieving logs from GitHub Actions.  Subfields:
+        Configuration for retrieving assets from GitHub Actions.  Subfields:
 
         ``path``
             A template string that will be instantiated for each workflow run
@@ -121,12 +122,18 @@ keys:
             working directory) under which the run's build logs will be saved.
             See "`Path Templates`_" for more information.
 
+        ``artifacts_path``
+            *(optional)* A template string that will be instantiated for each
+            workflow run to produce the path for the directory (relative to the
+            current working directory) under which the run's artifacts will be
+            saved.  If this is not specified, no artifacts will be downloaded.
+
         ``workflows``
             *(optional)* A list of the filenames for the workflows for which to
-            retrieve logs.  The filenames should only consist of the workflow
+            retrieve assets.  The filenames should only consist of the workflow
             basenames, including the file extension (e.g., ``test.yml``, not
             ``.github/workflows/test.yml``).  When ``workflows`` is not
-            specified, logs are retrieved for all workflows in the repository.
+            specified, assets are retrieved for all workflows in the repository.
 
     ``travis``
         Configuration for retrieving logs from Travis-CI.com.  Subfield:
@@ -156,18 +163,18 @@ keys:
             repository name
 
 ``since``
-    A timestamp (date, time, & timezone); only logs for builds started after
+    A timestamp (date, time, & timezone); only assets for builds started after
     the given point in time will be retrieved
 
-    As the script retrieves new build logs, it keeps track of their starting
-    points.  Once the logs for all builds for the given CI system &
+    As the script retrieves new build assets, it keeps track of their starting
+    points.  Once the assets for all builds for the given CI system &
     configuration have been fetched up to a certain point, the timestamp for
     the latest such build is stored in the state file and used as the new
     ``since`` value for the respective CI system on subsequent runs.
 
 ``types``
-    A list of build trigger event types; only logs for builds triggered by one
-    of the given events will be retrieved
+    A list of build trigger event types; only assets for builds triggered by
+    one of the given events will be retrieved
 
     The recognized event types are:
 
@@ -198,8 +205,8 @@ keys:
     ``enabled``
         *(optional)* A boolean.  If true (default false), the current directory
         will be converted into a Datalad dataset if it is not one already,
-        the logs will optionally be divided up into subdatasets, and all new
-        logs will be committed at the end of a run of ``tinuous fetch``.
+        the assets will optionally be divided up into subdatasets, and all new
+        assets will be committed at the end of a run of ``tinuous fetch``.
         ``path`` template strings may contain ``//`` separators indicating the
         boundaries of subdatasets.
 
@@ -221,6 +228,7 @@ A sample config file:
     ci:
       github:
         path: '{path_prefix}/{wf_name}/{number}/'
+        artifacts_path: '{path_prefix}/{wf_name}/{number}-artifacts/'
         workflows:
           - test_crippled.yml
           - test_extensions.yml
@@ -247,7 +255,7 @@ A sample config file:
 Path Templates
 --------------
 
-The path at which logs for a given workflow run or build job are saved is
+The path at which assets for a given workflow run or build job are saved is
 determined by instantiating the path template string given in the configuration
 file for the corresponding CI system.  A template string is a filepath
 containing placeholders of the form ``{field}``, where the available
@@ -302,7 +310,7 @@ Authentication
 GitHub
 ~~~~~~
 
-In order to retrieve logs from GitHub, a GitHub OAuth token must be specified
+In order to retrieve assets from GitHub, a GitHub OAuth token must be specified
 either via the ``GITHUB_TOKEN`` environment variable or as the value of the
 ``hub.oauthtoken`` Git config option.
 
