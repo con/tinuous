@@ -1,9 +1,17 @@
 language: python
 cache: pip
 python:
-    - '3.8'
-    - '3.9'
+  - '3.8'
+  - '3.9'
+env:
+  - TOXENV=py
+jobs:
+  include:
+    - python: '3.8'
+      env: TOXENV=lint
+    - python: '3.8'
+      env: TOXENV=typing
 install:
-    - pip install .
+  - pip install tox
 script:
-    - tinuous --help
+  - tox
