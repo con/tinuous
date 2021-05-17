@@ -22,6 +22,7 @@ from click_loglevel import LogLevel
 from datalad.api import Dataset
 from dateutil.parser import isoparse
 from github import Github
+from github.Repository import Repository
 from github.Workflow import Workflow
 from github.WorkflowRun import WorkflowRun
 from in_place import InPlace
@@ -178,17 +179,24 @@ class GitHubActions(CISystem):
 
     @cached_property
     def dl_session(self) -> requests.Session:
+        """
+        `requests.Session` used for downloading resources and other actions not
+        supported by Pygithub
+        """
         s = requests.Session()
         s.headers["Authorization"] = f"token {self.token}"
         return s
 
+    @cached_property
+    def ghrepo(self) -> Repository:
+        return self.client.get_repo(self.repo)
+
     def get_workflows(self) -> Iterator[Workflow]:
-        repo = self.client.get_repo(self.repo)
         if self.workflows is None:
-            yield from repo.get_workflows()
+            yield from self.ghrepo.get_workflows()
         else:
             for wffile in self.workflows:
-                yield repo.get_workflow(wffile)
+                yield self.ghrepo.get_workflow(wffile)
 
     def get_assets(
         self, event_types: List[EventType], artifacts: bool = False
@@ -262,6 +270,45 @@ class GitHubActions(CISystem):
                 if not artifact["expired"]:
                     yield (artifact["name"], artifact["archive_download_url"])
             url = r.links.get("next", {}).get("url")
+
+    def get_release_assets(self) -> Iterator["GHReleaseAsset"]:
+        log.info("Fetching releases newer than %s", self.since)
+        for rel in self.ghrepo.get_releases():
+            if rel.draft:
+                log.info("Release %s is draft; skipping", rel.tag_name)
+                continue
+            if rel.prerelease:
+                log.info("Release %s is prerelease; skipping", rel.tag_name)
+                continue
+            ts = ensure_aware(rel.published_at)
+            if ts <= self.since:
+                continue
+            self.register_build(ts, True)  # TODO: Set to False for drafts?
+            log.info("Found release %s", rel.tag_name)
+            r = self.dl_session.get(
+                f"https://api.github.com/repos/{self.repo}/git/refs/tags/{rel.tag_name}"
+            )
+            r.raise_for_status()
+            tagobj = r.json()["object"]
+            if tagobj["type"] == "commit":
+                commit = tagobj["sha"]
+            elif tagobj["type"] == "tag":
+                r = self.dl_session.get(tagobj["url"])
+                r.raise_for_status()
+                commit = r.json()["object"]["sha"]
+            else:
+                raise RuntimeError(
+                    f"Unexpected type for tag {rel.tag_name}: {tagobj['type']!r}"
+                )
+            for asset in rel.get_assets():
+                yield GHReleaseAsset(
+                    session=self.dl_session,
+                    published_at=ts,
+                    tag_name=rel.tag_name,
+                    commit=commit,
+                    name=asset.name,
+                    download_url=asset.browser_download_url,
+                )
 
 
 class GHAAsset(Asset):
@@ -414,6 +461,59 @@ class GHAArtifact(GHAAsset, Artifact):
         finally:
             zippath.unlink(missing_ok=True)
         return list(iterfiles(target_dir))
+
+
+class GHReleaseAsset(BaseModel):
+    session: requests.Session
+    published_at: datetime
+    tag_name: str
+    commit: str
+    name: str
+    download_url: str
+
+    class Config:
+        # To allow requests.Session:
+        arbitrary_types_allowed = True
+
+    def path_fields(self) -> Dict[str, str]:
+        utc_date = self.published_at.astimezone(timezone.utc)
+        return {
+            "year": utc_date.strftime("%Y"),
+            "month": utc_date.strftime("%m"),
+            "day": utc_date.strftime("%d"),
+            "hour": utc_date.strftime("%H"),
+            "minute": utc_date.strftime("%M"),
+            "second": utc_date.strftime("%S"),
+            "ci": "github",
+            "type": "release",
+            "type_id": self.tag_name,
+            "commit": self.commit,
+            "abbrev_commit": self.commit[:7],
+        }
+
+    def expand_path(self, path_template: str, vars: Dict[str, str]) -> str:
+        return expand_template(path_template, self.path_fields(), vars)
+
+    def download(self, path: Path) -> List[Path]:
+        target = path / self.name
+        if target.exists():
+            log.info(
+                "Asset %s for release %s already downloaded to %s; skipping",
+                self.name,
+                self.tag_name,
+                target,
+            )
+            return []
+        path.mkdir(parents=True, exist_ok=True)
+        log.info(
+            "Downloading asset %s for release %s to %s",
+            self.name,
+            self.tag_name,
+            target,
+        )
+        r = self.session.get(self.download_url, stream=True)
+        stream_to_file(r, target)
+        return [target]
 
 
 class Travis(CISystem):
@@ -725,6 +825,7 @@ class CIConfig(NoExtraModel, ABC):
 
 class GitHubConfig(CIConfig):
     artifacts_path: Optional[str] = None
+    releases_path: Optional[str] = None
     workflows: Optional[List[str]] = None
 
     @staticmethod
@@ -876,11 +977,10 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
         ds.create(force=True, cfg_proc=cfg.datalad.cfg_proc)
     logs_added = 0
     artifacts_added = 0
+    relassets_added = 0
     for name, cicfg in cfg.ci.items():
         get_artifacts = getattr(cicfg, "artifacts_path", None) is not None
-        log.info(
-            "Fetching logs%s from %s", " and artifacts" if get_artifacts else "", name
-        )
+        log.info("Fetching resources from %s", name)
         try:
             since = datetime.fromisoformat(since_stamps[name])
         except KeyError:
@@ -898,13 +998,7 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
             else:
                 raise AssertionError(f"Unexpected asset type {type(obj).__name__}")
             if cfg.datalad.enabled:
-                dspaths = path.split("//")
-                if "" in dspaths:
-                    raise click.UsageError("Path contains empty '//'-delimited segment")
-                for i in range(1, len(dspaths)):
-                    dsp = "/".join(dspaths[:i])
-                    if not Path(dsp).exists():
-                        ds.create(dsp, cfg_proc=cfg.datalad.cfg_proc)
+                ensure_datalad(ds, path, cfg.datalad.cfg_proc)
             paths = obj.download(Path(path))
             if isinstance(obj, BuildLog):
                 logs_added += len(paths)
@@ -913,17 +1007,27 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
                         sanitize(p, cfg.secrets, cfg.allow_secrets_regex)
             elif isinstance(obj, Artifact):
                 artifacts_added += len(paths)
+        if isinstance(cicfg, GitHubConfig) and cicfg.releases_path is not None:
+            assert isinstance(ci, GitHubActions)
+            for asset in ci.get_release_assets():
+                path = asset.expand_path(cicfg.releases_path, cfg.vars)
+                if cfg.datalad.enabled:
+                    ensure_datalad(ds, path, cfg.datalad.cfg_proc)
+                paths = asset.download(Path(path))
+                relassets_added += len(paths)
         since_stamps[name] = ci.new_since().isoformat()
         log.debug("%s timestamp floor updated to %s", name, since_stamps[name])
     with open(state, "w") as fp:
         json.dump(since_stamps, fp)
     log.info("%d logs downloaded", logs_added)
-    if get_artifacts:
-        log.info("%d artifacts downloaded", artifacts_added)
-    if cfg.datalad.enabled and (logs_added or artifacts_added):
+    log.info("%d artifacts downloaded", artifacts_added)
+    log.info("%d release assets downloaded", relassets_added)
+    if cfg.datalad.enabled and (logs_added or artifacts_added or relassets_added):
         msg = f"[tinuous] {logs_added} logs added"
-        if get_artifacts:
+        if artifacts_added:
             msg += f", {artifacts_added} artifacts added"
+        if relassets_added:
+            msg += f", {relassets_added} release assets added"
         ds.save(recursive=True, message=msg)
 
 
@@ -991,6 +1095,16 @@ def iterfiles(dirpath: Path) -> Iterator[Path]:
                 dirs.append(p)
             else:
                 yield p
+
+
+def ensure_datalad(ds: Dataset, path: str, cfg_proc: Optional[str]) -> None:
+    dspaths = path.split("//")
+    if "" in dspaths:
+        raise click.UsageError("Path contains empty '//'-delimited segment")
+    for i in range(1, len(dspaths)):
+        dsp = "/".join(dspaths[:i])
+        if not Path(dsp).exists():
+            ds.create(dsp, cfg_proc=cfg_proc)
 
 
 if __name__ == "__main__":

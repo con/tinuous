@@ -22,9 +22,9 @@
 | `Issues <https://github.com/con/tinuous/issues>`_
 | `Changelog <https://github.com/con/tinuous/blob/master/CHANGELOG.md>`_
 
-``tinuous`` is a command for downloading build logs and (for GitHub Actions
-only) artifacts for a GitHub repository from GitHub Actions, Travis-CI.com,
-and/or Appveyor.
+``tinuous`` is a command for downloading build logs and (for GitHub
+only) artifacts & release assets for a GitHub repository from GitHub Actions,
+Travis-CI.com, and/or Appveyor.
 
 Installation
 ============
@@ -128,6 +128,13 @@ keys:
             current working directory) under which the run's artifacts will be
             saved.  If this is not specified, no artifacts will be downloaded.
 
+        ``releases_path``
+            *(optional)* A template string that will be instantiated for each
+            (non-draft, non-prerelease) GitHub release to produce the path for
+            the directory (relative to the current working directory) under
+            which the release's assets will be saved.  If this is not
+            specified, no release assets will be downloaded.
+
         ``workflows``
             *(optional)* A list of the filenames for the workflows for which to
             retrieve assets.  The filenames should only consist of the workflow
@@ -224,11 +231,12 @@ A sample config file:
 
     repo: datalad/datalad
     vars:
-      path_prefix: '{year}/{month}/{day}/{ci}/{type}/{type_id}/{commit}'
+      path_prefix: '{year}//{month}//{day}/{ci}/{type}/{type_id}/{commit}'
     ci:
       github:
-        path: '{path_prefix}/{wf_name}/{number}/'
-        artifacts_path: '{path_prefix}/{wf_name}/{number}-artifacts/'
+        path: '{path_prefix}/{wf_name}/{number}/logs/'
+        artifacts_path: '{path_prefix}/{wf_name}/{number}/artifacts/'
+        releases_path: '{path_prefix}/'
         workflows:
           - test_crippled.yml
           - test_extensions.yml
@@ -255,49 +263,60 @@ A sample config file:
 Path Templates
 --------------
 
-The path at which assets for a given workflow run or build job are saved is
-determined by instantiating the path template string given in the configuration
-file for the corresponding CI system.  A template string is a filepath
-containing placeholders of the form ``{field}``, where the available
-placeholders are:
+The path at which assets for a given workflow run, build job, or release are
+saved is determined by instantiating the appropriate path template string given
+in the configuration file for the corresponding CI system.  A template string
+is a filepath containing placeholders of the form ``{field}``, where the
+available placeholders are:
 
 ===================  ==========================================================
 Placeholder          Definition
 ===================  ==========================================================
-``{year}``           The four-digit year in which the build was started
-``{month}``          The two-digit month in which the build was started
-``{day}``            The two-digit day in which the build was started
-``{hour}``           The two-digit hour at which the build was started
-``{minute}``         The two-digit minute at which the build was started
-``{second}``         The two-digit second at which the build was started
+``{year}``           The four-digit year in which the build was started or the
+                     release was published
+``{month}``          The two-digit month in which the build was started or the
+                     release was published
+``{day}``            The two-digit day in which the build was started or the
+                     release was published
+``{hour}``           The two-digit hour at which the build was started or the
+                     release was published
+``{minute}``         The two-digit minute at which the build was started or the
+                     release was published
+``{second}``         The two-digit second at which the build was started or the
+                     release was published
 ``{ci}``             The name of the CI system (``github``, ``travis``, or
                      ``appveyor``)
 ``{type}``           The event type that triggered the build (``cron``, ``pr``,
-                     or ``push``)
+                     or ``push``), or ``release`` for GitHub releases
 ``{type_id}``        Further information on the triggering event; for ``cron``,
                      this is a timestamp for the start of the build; for
                      ``pr``, this is the number of the associated pull request,
                      or ``UNK`` if it cannot be determined; for ``push``, this
                      is the name of the branch to which the push was made (or
-                     possibly the tag that was pushed, if using Appveyor)
-``{commit}``         The hash of the commit the build ran against
+                     possibly the tag that was pushed, if using Appveyor); for
+                     ``release``, this is the name of the tag
+``{commit}``         The hash of the commit the build ran against or that was
+                     tagged for the release
 ``{abbrev_commit}``  The first seven characters of the commit hash
 ``{number}``         The run number of the workflow run (GitHub) or the build
-                     number (Travis and Appveyor)
+                     number (Travis and Appveyor) [1]_
 ``{status}``         The success status of the workflow run (GitHub) or job
                      (Travis and Appveyor); the exact strings used depend on
-                     the CI system
+                     the CI system [1]_
 ``{common_status}``  The success status of the workflow run or job, normalized
                      into one of ``success``, ``failed``, ``errored``, or
-                     ``incomplete``
-``{wf_name}``        *(GitHub only)* The name of the workflow
+                     ``incomplete`` [1]_
+``{wf_name}``        *(GitHub only)* The name of the workflow [1]_
 ``{wf_file}``        *(GitHub only)* The basename of the workflow file
-                     (including the file extension)
-``{run_id}``         *(GitHub only)* The unique ID of the workflow run
+                     (including the file extension) [1]_
+``{run_id}``         *(GitHub only)* The unique ID of the workflow run [1]_
 ``{job}``            *(Travis and Appveyor only)* The number of the job,
                      without the build number prefix (Travis) or the job ID
-                     string (Appveyor)
+                     string (Appveyor) [1]_
 ===================  ==========================================================
+
+.. [1] These placeholders are only available for ``path`` and
+       ``artifacts_path``, not ``releases_path``
 
 All timestamps and timestamp components are in UTC.
 
