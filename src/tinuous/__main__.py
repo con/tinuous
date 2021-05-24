@@ -155,6 +155,7 @@ class Artifact(Asset):
 
 class GitHubActions(CISystem):
     workflows: Optional[List[str]] = None
+    hash2pr: Dict[str, str] = Field(default_factory=dict)
 
     @staticmethod
     def get_auth_token() -> str:
@@ -242,13 +243,15 @@ class GitHubActions(CISystem):
         elif event_type is EventType.PULL_REQUEST:
             if run.pull_requests:
                 return str(run.pull_requests[0].number)
+            elif run.head_sha in self.hash2pr:
+                return self.hash2pr[run.head_sha]
             else:
                 # The experimental "List pull requests associated with a
                 # commit" endpoint does not return data reliably enough to be
                 # worth using, so we have to do an issue search for the
                 # matching PR instead.
                 try:
-                    return str(
+                    pr = str(
                         self.client.search_issues(
                             f"repo:{run.repository.full_name} is:pr {run.head_sha}",
                             sort="created",
@@ -256,7 +259,9 @@ class GitHubActions(CISystem):
                         )[0].number
                     )
                 except IndexError:
-                    return "UNK"
+                    pr = "UNK"
+                self.hash2pr[run.head_sha] = pr
+                return pr
         else:
             raise AssertionError(f"Unhandled EventType: {event_type!r}")
 
