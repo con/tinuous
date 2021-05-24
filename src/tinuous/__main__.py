@@ -88,16 +88,17 @@ class APIClient:
             url = path
         else:
             url = self.base_url.rstrip("/") + "/" + path.lstrip("/")
-        while True:
+        i = 1
+        r = self.session.get(url, **kwargs)
+        while r.status_code >= 500 and i <= 10:
+            log.debug(
+                "Request to %s returned %d; waiting & retrying", url, r.status_code
+            )
+            sleep(i)
+            i += 1
             r = self.session.get(url, **kwargs)
-            if r.status_code >= 500:
-                log.debug(
-                    "Request to %s returned %d; waiting & retrying", url, r.status_code
-                )
-                sleep(1)
-            else:
-                r.raise_for_status()
-                return r
+        r.raise_for_status()
+        return r
 
 
 class CISystem(ABC, BaseModel):
