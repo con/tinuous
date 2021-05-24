@@ -246,20 +246,29 @@ class GitHubActions(CISystem):
             elif run.head_sha in self.hash2pr:
                 return self.hash2pr[run.head_sha]
             else:
-                # The experimental "List pull requests associated with a
-                # commit" endpoint does not return data reliably enough to be
-                # worth using, so we have to do an issue search for the
-                # matching PR instead.
-                try:
-                    pr = str(
-                        self.client.search_issues(
-                            f"repo:{run.repository.full_name} is:pr {run.head_sha}",
-                            sort="created",
-                            order="asc",
-                        )[0].number
-                    )
-                except IndexError:
-                    pr = "UNK"
+                r = self.dl_session.get(
+                    f"https://api.github.com/repos/{self.repo}/commits"
+                    f"/{run.head_sha}/pulls",
+                    headers={"Accept": "application/vnd.github.groot-preview+json"},
+                )
+                r.raise_for_status()
+                if data := r.json():
+                    pr = str(data[0]["number"])
+                else:
+                    # The above endpoint ignores PRs not made to the default
+                    # branch, so we have to fall back to performing an issue
+                    # search to fill those in.  This should hopefully be used
+                    # sparingly, as there's a 30 searches per hour rate limit.
+                    try:
+                        pr = str(
+                            self.client.search_issues(
+                                f"repo:{run.repository.full_name} is:pr {run.head_sha}",
+                                sort="created",
+                                order="asc",
+                            )[0].number
+                        )
+                    except IndexError:
+                        pr = "UNK"
                 self.hash2pr[run.head_sha] = pr
                 return pr
         else:
