@@ -13,6 +13,7 @@ import re
 from shutil import rmtree
 import subprocess
 import tempfile
+from time import sleep
 from typing import Any, Dict, Iterator, List, Match, Optional, Pattern, Tuple
 from urllib.parse import quote
 from zipfile import ZipFile
@@ -76,6 +77,29 @@ class EventType(Enum):
         }.get(travis_event)
 
 
+class APIClient:
+    def __init__(self, base_url: str, headers: Dict[str, str]):
+        self.base_url = base_url
+        self.session = requests.Session()
+        self.session.headers.update(headers)
+
+    def get(self, path: str, **kwargs: Any) -> requests.Response:
+        if path.lower().startswith(("http://", "https://")):
+            url = path
+        else:
+            url = self.base_url.rstrip("/") + "/" + path.lstrip("/")
+        while True:
+            r = self.session.get(url, **kwargs)
+            if r.status_code >= 500:
+                log.debug(
+                    "Request to %s returned %d; waiting & retrying", url, r.status_code
+                )
+                sleep(1)
+            else:
+                r.raise_for_status()
+                return r
+
+
 class CISystem(ABC, BaseModel):
     repo: str
     token: str
@@ -112,12 +136,17 @@ class CISystem(ABC, BaseModel):
 
 
 class Asset(ABC, BaseModel):
+    client: APIClient
     created_at: datetime
     event_type: EventType
     event_id: str
     commit: str
     number: int
     status: str
+
+    class Config:
+        # To allow APIClient:
+        arbitrary_types_allowed = True
 
     def path_fields(self) -> Dict[str, str]:
         utc_date = self.created_at.astimezone(timezone.utc)
@@ -179,14 +208,15 @@ class GitHubActions(CISystem):
         return Github(self.token)
 
     @cached_property
-    def dl_session(self) -> requests.Session:
+    def extra_client(self) -> APIClient:
         """
-        `requests.Session` used for downloading resources and other actions not
-        supported by Pygithub
+        Client for downloading resources and other actions not supported by
+        Pygithub
         """
-        s = requests.Session()
-        s.headers["Authorization"] = f"token {self.token}"
-        return s
+        return APIClient(
+            "https://api.github.com",
+            {"Authorization": f"token {self.token}"},
+        )
 
     @cached_property
     def ghrepo(self) -> Repository:
@@ -219,12 +249,12 @@ class GitHubActions(CISystem):
                     if run_event in event_types:
                         event_id = self.get_event_id(run, run_event)
                         yield GHABuildLog.from_workflow_run(
-                            self.dl_session, wf, run, run_event, event_id
+                            self.extra_client, wf, run, run_event, event_id
                         )
                         if artifacts:
                             for name, download_url in self.get_artifacts(run):
                                 yield GHAArtifact.from_workflow_run(
-                                    self.dl_session,
+                                    self.extra_client,
                                     wf,
                                     run,
                                     run_event,
@@ -246,12 +276,10 @@ class GitHubActions(CISystem):
             elif run.head_sha in self.hash2pr:
                 return self.hash2pr[run.head_sha]
             else:
-                r = self.dl_session.get(
-                    f"https://api.github.com/repos/{self.repo}/commits"
-                    f"/{run.head_sha}/pulls",
+                r = self.extra_client.get(
+                    f"/repos/{self.repo}/commits/{run.head_sha}/pulls",
                     headers={"Accept": "application/vnd.github.groot-preview+json"},
                 )
-                r.raise_for_status()
                 if data := r.json():
                     pr = str(data[0]["number"])
                 else:
@@ -278,8 +306,7 @@ class GitHubActions(CISystem):
         """ Yields each artifact as a (name, download_url) pair """
         url = run.artifacts_url
         while url is not None:
-            r = self.dl_session.get(url)
-            r.raise_for_status()
+            r = self.extra_client.get(url)
             for artifact in r.json()["artifacts"]:
                 if not artifact["expired"]:
                     yield (artifact["name"], artifact["archive_download_url"])
@@ -299,16 +326,14 @@ class GitHubActions(CISystem):
                 continue
             self.register_build(ts, True)  # TODO: Set to False for drafts?
             log.info("Found release %s", rel.tag_name)
-            r = self.dl_session.get(
-                f"https://api.github.com/repos/{self.repo}/git/refs/tags/{rel.tag_name}"
+            r = self.extra_client.get(
+                f"/repos/{self.repo}/git/refs/tags/{rel.tag_name}"
             )
-            r.raise_for_status()
             tagobj = r.json()["object"]
             if tagobj["type"] == "commit":
                 commit = tagobj["sha"]
             elif tagobj["type"] == "tag":
-                r = self.dl_session.get(tagobj["url"])
-                r.raise_for_status()
+                r = self.extra_client.get(tagobj["url"])
                 commit = r.json()["object"]["sha"]
             else:
                 raise RuntimeError(
@@ -316,7 +341,7 @@ class GitHubActions(CISystem):
                 )
             for asset in rel.get_assets():
                 yield GHReleaseAsset(
-                    session=self.dl_session,
+                    client=self.extra_client,
                     published_at=ts,
                     tag_name=rel.tag_name,
                     commit=commit,
@@ -326,14 +351,9 @@ class GitHubActions(CISystem):
 
 
 class GHAAsset(Asset):
-    session: requests.Session
     workflow_name: str
     workflow_file: str
     run_id: int
-
-    class Config:
-        # To allow requests.Session:
-        arbitrary_types_allowed = True
 
     def path_fields(self) -> Dict[str, str]:
         fields = super().path_fields()
@@ -354,14 +374,14 @@ class GHABuildLog(GHAAsset, BuildLog):
     @classmethod
     def from_workflow_run(
         cls,
-        session: requests.Session,
+        client: APIClient,
         workflow: Workflow,
         run: WorkflowRun,
         event_type: EventType,
         event_id: str,
     ) -> "GHABuildLog":
         return cls(
-            session=session,
+            client=client,
             logs_url=run.logs_url,
             created_at=ensure_aware(run.created_at),
             event_type=event_type,
@@ -392,13 +412,16 @@ class GHABuildLog(GHAAsset, BuildLog):
             self.number,
             path,
         )
-        r = self.session.get(self.logs_url)
-        if r.status_code == 404:
-            # This can happen when a workflow failed to run due to, say, a
-            # syntax error.
-            log.error("Request for logs returned 404; skipping")
-            return []
-        r.raise_for_status()
+        try:
+            r = self.client.get(self.logs_url)
+        except requests.HTTPError as e:
+            if e.response.status_code == 404:
+                # This can happen when a workflow failed to run due to, say, a
+                # syntax error.
+                log.error("Request for logs returned 404; skipping")
+                return []
+            else:
+                raise
         try:
             with BytesIO(r.content) as blob, ZipFile(blob) as zf:
                 zf.extractall(path)
@@ -415,7 +438,7 @@ class GHAArtifact(GHAAsset, Artifact):
     @classmethod
     def from_workflow_run(
         cls,
-        session: requests.Session,
+        client: APIClient,
         workflow: Workflow,
         run: WorkflowRun,
         event_type: EventType,
@@ -424,7 +447,7 @@ class GHAArtifact(GHAAsset, Artifact):
         download_url: str,
     ) -> "GHAArtifact":
         return cls(
-            session=session,
+            client=client,
             created_at=ensure_aware(run.created_at),
             event_type=event_type,
             event_id=event_id,
@@ -459,8 +482,7 @@ class GHAArtifact(GHAAsset, Artifact):
             self.number,
             path,
         )
-        r = self.session.get(self.download_url, stream=True)
-        r.raise_for_status()
+        r = self.client.get(self.download_url, stream=True)
         fd, fpath = tempfile.mkstemp()
         os.close(fd)
         zippath = Path(fpath)
@@ -478,7 +500,7 @@ class GHAArtifact(GHAAsset, Artifact):
 
 
 class GHReleaseAsset(BaseModel):
-    session: requests.Session
+    client: APIClient
     published_at: datetime
     tag_name: str
     commit: str
@@ -486,7 +508,7 @@ class GHReleaseAsset(BaseModel):
     download_url: str
 
     class Config:
-        # To allow requests.Session:
+        # To allow APIClient:
         arbitrary_types_allowed = True
 
     def path_fields(self) -> Dict[str, str]:
@@ -525,7 +547,7 @@ class GHReleaseAsset(BaseModel):
             self.tag_name,
             target,
         )
-        r = self.session.get(self.download_url, stream=True)
+        r = self.client.get(self.download_url, stream=True)
         stream_to_file(r, target)
         return [target]
 
@@ -559,24 +581,20 @@ class Travis(CISystem):
         return token
 
     @cached_property
-    def session(self) -> requests.Session:
-        s = requests.Session()
-        s.headers["Travis-API-Version"] = "3"
-        s.headers["Authorization"] = f"token {self.token}"
-        return s
-
-    def get(self, path: str, **kwargs: Any) -> requests.Response:
-        url = "https://api.travis-ci.com/" + path.lstrip("/")
-        r = self.session.get(url, **kwargs)
-        assert isinstance(r, requests.Response)
-        r.raise_for_status()
-        return r
+    def client(self) -> APIClient:
+        return APIClient(
+            "https://api.travis-ci.com",
+            {
+                "Travis-API-Version": "3",
+                "Authorization": f"token {self.token}",
+            },
+        )
 
     def paginate(
         self, path: str, params: Optional[Dict[str, str]] = None
     ) -> Iterator[dict]:
         while True:
-            data = self.get(path, params=params).json()
+            data = self.client.get(path, params=params).json()
             yield from data[data["@type"]]
             try:
                 path = data["@pagination"]["next"]["@href"]
@@ -611,20 +629,19 @@ class Travis(CISystem):
                 self.register_build(ts, True)
                 if run_event in event_types:
                     for job in build["jobs"]:
-                        yield TravisJobLog.from_job(self, build, job)
+                        yield TravisJobLog.from_job(self.client, build, job)
                 else:
                     log.info("Event type is %r; skipping", build["event_type"])
 
 
 class TravisJobLog(BuildLog):
-    client: Travis
     job: str
     job_id: int
 
     @classmethod
     def from_job(
         cls,
-        client: Travis,
+        client: APIClient,
         build: Dict[str, Any],
         job: Dict[str, Any],
     ) -> "TravisJobLog":
@@ -706,21 +723,16 @@ class Appveyor(CISystem):
             return self.projectSlug
 
     @cached_property
-    def session(self) -> requests.Session:
-        s = requests.Session()
-        s.headers["Authorization"] = f"Bearer {self.token}"
-        return s
-
-    def get(self, path: str, **kwargs: Any) -> requests.Response:
-        url = "https://ci.appveyor.com/" + path.lstrip("/")
-        r = self.session.get(url, **kwargs)
-        r.raise_for_status()
-        return r
+    def client(self) -> APIClient:
+        return APIClient(
+            "https://ci.appveyor.com",
+            {"Authorization": f"Bearer {self.token}"},
+        )
 
     def get_builds(self) -> Iterator[dict]:
         params = {"recordsNumber": 20}
         while True:
-            data = self.get(
+            data = self.client.get(
                 f"/api/projects/{self.accountName}/{self.repo_slug}/history",
                 params=params,
             ).json()
@@ -749,23 +761,22 @@ class Appveyor(CISystem):
                 log.info("Found build %s", build["buildNumber"])
                 self.register_build(ts, True)
                 if run_event in event_types:
-                    for job in self.get(
+                    for job in self.client.get(
                         f"/api/projects/{self.accountName}/{self.repo_slug}"
                         f"/build/{build['version']}"
                     ).json()["build"]["jobs"]:
-                        yield AppveyorJobLog.from_job(self, build, job)
+                        yield AppveyorJobLog.from_job(self.client, build, job)
                 else:
                     log.info("Event type is %r; skipping", run_event.value)
 
 
 class AppveyorJobLog(BuildLog):
-    client: Appveyor
     job: str
 
     @classmethod
     def from_job(
         cls,
-        client: Appveyor,
+        client: APIClient,
         build: Dict[str, Any],
         job: Dict[str, Any],
     ) -> "AppveyorJobLog":
