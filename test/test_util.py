@@ -10,3 +10,17 @@ def test_expand_template() -> None:
         )
         == "FOO/BAR-BAZ.QUUX"
     )
+
+
+def test_expand_template_sliced() -> None:
+    assert (
+        expand_template(
+            "{commit[:7]}/{cleesh}",
+            {
+                "commit": "123456789012345678901234567890",
+                "description": "A test commit",
+            },
+            {"cleesh": "{description[:6]}"},
+        )
+        == "1234567/A test"
+    )
