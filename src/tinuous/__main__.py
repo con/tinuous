@@ -161,7 +161,6 @@ class Asset(ABC, BaseModel):
             "type": self.event_type.value,
             "type_id": self.event_id,
             "commit": self.commit,
-            "abbrev_commit": self.commit[:7],
             "number": str(self.number),
             "status": self.status,
             "common_status": COMMON_STATUS_MAP[self.status],
@@ -525,7 +524,6 @@ class GHReleaseAsset(BaseModel):
             "type": "release",
             "type_id": self.tag_name,
             "commit": self.commit,
-            "abbrev_commit": self.commit[:7],
         }
 
     def expand_path(self, path_template: str, vars: Dict[str, str]) -> str:

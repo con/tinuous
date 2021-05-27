@@ -231,7 +231,7 @@ A sample config file:
 
     repo: datalad/datalad
     vars:
-      path_prefix: '{year}//{month}//{day}/{ci}/{type}/{type_id}/{commit}'
+      path_prefix: '{year}//{month}//{day}/{ci}/{type}/{type_id}/{commit[:7]}'
     ci:
       github:
         path: '{path_prefix}/{wf_name}/{number}/logs/'
@@ -297,7 +297,6 @@ Placeholder          Definition
                      ``release``, this is the name of the tag
 ``{commit}``         The hash of the commit the build ran against or that was
                      tagged for the release
-``{abbrev_commit}``  The first seven characters of the commit hash
 ``{number}``         The run number of the workflow run (GitHub) or the build
                      number (Travis and Appveyor) [1]_
 ``{status}``         The success status of the workflow run (GitHub) or job
@@ -317,6 +316,9 @@ Placeholder          Definition
 
 .. [1] These placeholders are only available for ``path`` and
        ``artifacts_path``, not ``releases_path``
+
+A placeholder's value may be truncated to the first ``n`` characters by writing
+``{placeholder[:n]}``, e.g., ``{commit[:7]}``.
 
 All timestamps and timestamp components are in UTC.
 
