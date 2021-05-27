@@ -49,6 +49,12 @@ Global Options
 -c FILE, --config FILE          Read configuration from the given file [default
                                 value: ``config.yml``]
 
+-E FILE, --env FILE             Load environment variables from the given
+                                ``.env`` file.  By default, environment
+                                variables are loaded from the first file named
+                                "``.env``" found by searching from the current
+                                directory upwards.
+
 -l LEVEL, --log-level LEVEL     Set the log level to the given value.  Possible
                                 values are "``CRITICAL``", "``ERROR``",
                                 "``WARNING``", "``INFO``", "``DEBUG``" (all
@@ -325,6 +331,9 @@ Path templates may also contain custom placeholders defined in the top-level
 
 Authentication
 --------------
+
+Note that environment variables can be loaded from a ``.env`` file as an
+alternative to setting them directly in the environment.
 
 GitHub
 ~~~~~~
