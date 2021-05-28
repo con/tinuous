@@ -55,6 +55,13 @@ Global Options
                                 "``.env``" found by searching from the current
                                 directory upwards.
 
+                                **Warning**: Care must be taken when this file
+                                is located in a Git repository so as not to
+                                publicly expose it: either list the file in
+                                ``.gitignore`` or, if using Datalad or
+                                git-annex, configure git-annex to prohibit
+                                public sharing of the file.
+
 -l LEVEL, --log-level LEVEL     Set the log level to the given value.  Possible
                                 values are "``CRITICAL``", "``ERROR``",
                                 "``WARNING``", "``INFO``", "``DEBUG``" (all
