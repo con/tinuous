@@ -141,7 +141,8 @@ class Asset(ABC, BaseModel):
     created_at: datetime
     event_type: EventType
     event_id: str
-    commit: str
+    build_commit: str
+    commit: Optional[str]
     number: int
     status: str
 
@@ -151,6 +152,7 @@ class Asset(ABC, BaseModel):
 
     def path_fields(self) -> Dict[str, str]:
         utc_date = self.created_at.astimezone(timezone.utc)
+        commit = "UNK" if self.commit is None else self.commit
         return {
             "year": utc_date.strftime("%Y"),
             "month": utc_date.strftime("%m"),
@@ -160,7 +162,8 @@ class Asset(ABC, BaseModel):
             "second": utc_date.strftime("%S"),
             "type": self.event_type.value,
             "type_id": self.event_id,
-            "commit": self.commit,
+            "build_commit": self.build_commit,
+            "commit": commit,
             "number": str(self.number),
             "status": self.status,
             "common_status": COMMON_STATUS_MAP[self.status],
@@ -386,6 +389,7 @@ class GHABuildLog(GHAAsset, BuildLog):
             created_at=ensure_aware(run.created_at),
             event_type=event_type,
             event_id=event_id,
+            build_commit=run.head_sha,
             commit=run.head_sha,
             workflow_name=workflow.name,
             workflow_file=workflow.path.split("/")[-1],
@@ -451,6 +455,7 @@ class GHAArtifact(GHAAsset, Artifact):
             created_at=ensure_aware(run.created_at),
             event_type=event_type,
             event_id=event_id,
+            build_commit=run.head_sha,
             commit=run.head_sha,
             workflow_name=workflow.name,
             workflow_file=workflow.path.split("/")[-1],
@@ -523,6 +528,7 @@ class GHReleaseAsset(BaseModel):
             "ci": "github",
             "type": "release",
             "type_id": self.tag_name,
+            "build_commit": self.commit,
             "commit": self.commit,
         }
 
@@ -649,12 +655,16 @@ class TravisJobLog(BuildLog):
         if event is None:
             raise ValueError(f"Build has unknown event type {build['event_type']!r}")
         event_id: str
+        commit: Optional[str]
         if event is EventType.CRON:
             event_id = created_at.strftime("%Y%m%dT%H%M%S")
+            commit = build["commit"]["sha"]
         elif event is EventType.PUSH:
             event_id = build["branch"]["name"]
+            commit = build["commit"]["sha"]
         elif event is EventType.PULL_REQUEST:
             event_id = str(build["pull_request_number"])
+            commit = None
         else:
             raise AssertionError(f"Unhandled EventType: {event!r}")
         return cls(
@@ -662,7 +672,8 @@ class TravisJobLog(BuildLog):
             created_at=created_at,
             event_type=event,
             event_id=event_id,
-            commit=build["commit"]["sha"],
+            build_commit=build["commit"]["sha"],
+            commit=commit,
             number=int(build["number"]),
             job=removeprefix(job["number"], f"{build['number']}."),
             job_id=job["id"],
@@ -783,15 +794,18 @@ class AppveyorJobLog(BuildLog):
         if build.get("pullRequestId"):
             event = EventType.PULL_REQUEST
             event_id = build["pullRequestId"]
+            commit = build["pullRequestHeadCommitId"]
         else:
             event = EventType.PUSH
             event_id = build["branch"]
+            commit = build["commitId"]
         return cls(
             client=client,
             created_at=created_at,
             event_type=event,
             event_id=event_id,
-            commit=build["commitId"],
+            build_commit=build["commitId"],
+            commit=commit,
             number=build["buildNumber"],
             job=job["jobId"],
             status=job["status"],
