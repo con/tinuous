@@ -31,19 +31,17 @@ jobs:
           path: tinuous-inception
 
       - name: Run tinuous on tinuous
-        run: coverage run --rcfile ../tox.ini -m tinuous fetch
+        run: coverage run --source tinuous --branch -m tinuous fetch
         working-directory: tinuous-inception
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TRAVIS_TOKEN: ${{ secrets.TRAVIS_TOKEN }}
           APPVEYOR_TOKEN: ${{ secrets.APPVEYOR_TOKEN }}
 
-      - name: Report coverage
-        run: coverage report --rcfile ../tox.ini
-        working-directory: tinuous-inception
-
-      - name: Generate coverage.xml
-        run: coverage xml --rcfile ../tox.ini
+      - name: Coverage report
+        run: |
+          coverage report --precision 2 --show-missing
+          coverage xml
         working-directory: tinuous-inception
 
       - name: Upload coverage to Codecov
