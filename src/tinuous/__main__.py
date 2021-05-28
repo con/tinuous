@@ -20,7 +20,6 @@ from zipfile import ZipFile
 
 import click
 from click_loglevel import LogLevel
-from datalad.api import Dataset
 from dateutil.parser import isoparse
 from dotenv import load_dotenv
 from github import Github
@@ -1004,9 +1003,14 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
     tokens: Dict[str, str] = {}
     for name, cicfg in cfg.ci.items():
         tokens[name] = cicfg.get_auth_token()
-    ds = Dataset(os.curdir)
-    if cfg.datalad.enabled and not ds.is_installed():
-        ds.create(force=True, cfg_proc=cfg.datalad.cfg_proc)
+    if cfg.datalad.enabled:
+        try:
+            from datalad.api import Dataset
+        except ImportError:
+            raise click.UsageError("datalad.enabled set, but datalad is not installed")
+        ds = Dataset(os.curdir)
+        if not ds.is_installed():
+            ds.create(force=True, cfg_proc=cfg.datalad.cfg_proc)
     logs_added = 0
     artifacts_added = 0
     relassets_added = 0
@@ -1129,7 +1133,8 @@ def iterfiles(dirpath: Path) -> Iterator[Path]:
                 yield p
 
 
-def ensure_datalad(ds: Dataset, path: str, cfg_proc: Optional[str]) -> None:
+def ensure_datalad(ds: Any, path: str, cfg_proc: Optional[str]) -> None:
+    # `ds` is actually a datalad Dataset, but the import is optional.
     dspaths = path.split("//")
     if "" in dspaths:
         raise click.UsageError("Path contains empty '//'-delimited segment")
