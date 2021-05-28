@@ -22,6 +22,7 @@ import click
 from click_loglevel import LogLevel
 from datalad.api import Dataset
 from dateutil.parser import isoparse
+from dotenv import load_dotenv
 from github import Github
 from github.Repository import Repository
 from github.Workflow import Workflow
@@ -948,6 +949,12 @@ class Config(NoExtraModel):
     show_default=True,
 )
 @click.option(
+    "-E",
+    "--env",
+    type=click.Path(exists=True, dir_okay=False),
+    help="Load environment variables from given .env file",
+)
+@click.option(
     "-l",
     "--log-level",
     type=LogLevel(),
@@ -956,8 +963,9 @@ class Config(NoExtraModel):
     show_default=True,
 )
 @click.pass_context
-def main(ctx: click.Context, config: str, log_level: int) -> None:
+def main(ctx: click.Context, config: str, log_level: int, env: Optional[str]) -> None:
     """ Download build logs from GitHub Actions, Travis, and Appveyor """
+    load_dotenv(env)
     logging.basicConfig(
         format="%(asctime)s [%(levelname)-8s] %(name)s %(message)s",
         datefmt="%Y-%m-%dT%H:%M:%S%z",
