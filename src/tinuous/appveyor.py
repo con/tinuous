@@ -5,7 +5,7 @@ from typing import Any, Dict, Iterator, List, Optional
 
 from dateutil.parser import isoparse
 
-from .base import APIClient, Asset, BuildLog, CISystem, EventType
+from .base import APIClient, BuildAsset, BuildLog, CISystem, EventType
 from .util import log, stream_to_file
 
 
@@ -50,9 +50,9 @@ class Appveyor(CISystem):
             else:
                 break
 
-    def get_assets(
+    def get_build_assets(
         self, event_types: List[EventType], artifacts: bool = False  # noqa: U100
-    ) -> Iterator["Asset"]:
+    ) -> Iterator["BuildAsset"]:
         log.info("Fetching runs newer than %s", self.since)
         for build in self.get_builds():
             if build.get("pullRequestId"):

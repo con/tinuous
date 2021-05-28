@@ -101,7 +101,7 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
         except KeyError:
             since = cfg.since
         ci = cicfg.get_system(repo=cfg.repo, since=since, token=tokens[name])
-        for obj in ci.get_assets(cfg.types, artifacts=get_artifacts):
+        for obj in ci.get_build_assets(cfg.types, artifacts=get_artifacts):
             if isinstance(obj, BuildLog):
                 path = obj.expand_path(cicfg.path, cfg.vars)
             elif isinstance(obj, Artifact):

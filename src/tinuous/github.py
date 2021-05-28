@@ -17,7 +17,7 @@ from github.WorkflowRun import WorkflowRun
 from pydantic import BaseModel, Field
 import requests
 
-from .base import APIClient, Artifact, Asset, BuildLog, CISystem, EventType
+from .base import APIClient, Artifact, BuildAsset, BuildLog, CISystem, EventType
 from .util import ensure_aware, expand_template, iterfiles, log, stream_to_file
 
 
@@ -68,9 +68,9 @@ class GitHubActions(CISystem):
             for wffile in self.workflows:
                 yield self.ghrepo.get_workflow(wffile)
 
-    def get_assets(
+    def get_build_assets(
         self, event_types: List[EventType], artifacts: bool = False
-    ) -> Iterator["Asset"]:
+    ) -> Iterator["BuildAsset"]:
         log.info("Fetching runs newer than %s", self.since)
         for wf in self.get_workflows():
             log.info("Fetching runs for workflow %s (%s)", wf.path, wf.name)
@@ -189,7 +189,7 @@ class GitHubActions(CISystem):
                 )
 
 
-class GHAAsset(Asset):
+class GHAAsset(BuildAsset):
     workflow_name: str
     workflow_file: str
     run_id: int

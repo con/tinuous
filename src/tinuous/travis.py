@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 from dateutil.parser import isoparse
 
-from .base import APIClient, Asset, BuildLog, CISystem, EventType
+from .base import APIClient, BuildAsset, BuildLog, CISystem, EventType
 from .util import log, removeprefix, stream_to_file
 
 
@@ -61,9 +61,9 @@ class Travis(CISystem):
                 break
             params = None
 
-    def get_assets(
+    def get_build_assets(
         self, event_types: List[EventType], artifacts: bool = False  # noqa: U100
-    ) -> Iterator["Asset"]:
+    ) -> Iterator["BuildAsset"]:
         log.info("Fetching builds newer than %s", self.since)
         for build in self.paginate(
             f"/repo/{quote(self.repo, safe='')}/builds",

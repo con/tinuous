@@ -90,9 +90,9 @@ class CISystem(ABC, BaseModel):
         ...  # pragma: no cover
 
     @abstractmethod
-    def get_assets(
+    def get_build_assets(
         self, event_types: List[EventType], artifacts: bool = False
-    ) -> Iterator["Asset"]:
+    ) -> Iterator["BuildAsset"]:
         ...  # pragma: no cover
 
     def register_build(self, ts: datetime, processed: bool) -> None:
@@ -113,7 +113,7 @@ class CISystem(ABC, BaseModel):
         keep_untouched = (cached_property,)
 
 
-class Asset(ABC, BaseModel):
+class BuildAsset(ABC, BaseModel):
     client: APIClient
     created_at: datetime
     event_type: EventType
@@ -154,9 +154,9 @@ class Asset(ABC, BaseModel):
         ...  # pragma: no cover
 
 
-class BuildLog(Asset):
+class BuildLog(BuildAsset):
     pass
 
 
-class Artifact(Asset):
+class Artifact(BuildAsset):
     pass
