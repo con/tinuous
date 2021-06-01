@@ -79,9 +79,9 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
     except FileNotFoundError:
         since_stamps = {}
     # Fetch tokens early in order to catch failures early:
-    tokens: Dict[str, str] = {}
+    tokens: Dict[str, Dict[str, str]] = {}
     for name, cicfg in cfg.ci.items():
-        tokens[name] = cicfg.get_auth_token()
+        tokens[name] = cicfg.get_auth_tokens()
     if cfg.datalad.enabled:
         try:
             from datalad.api import Dataset
@@ -100,7 +100,7 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
             since = datetime.fromisoformat(since_stamps[name])
         except KeyError:
             since = cfg.since
-        ci = cicfg.get_system(repo=cfg.repo, since=since, token=tokens[name])
+        ci = cicfg.get_system(repo=cfg.repo, since=since, tokens=tokens[name])
         for obj in ci.get_build_assets(cfg.types, artifacts=get_artifacts):
             if isinstance(obj, BuildLog):
                 path = obj.expand_path(cicfg.path, cfg.vars)

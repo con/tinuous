@@ -14,14 +14,14 @@ class Appveyor(CISystem):
     projectSlug: Optional[str]
 
     @staticmethod
-    def get_auth_token() -> str:
+    def get_auth_tokens() -> Dict[str, str]:
         token = os.environ.get("APPVEYOR_TOKEN")
         if not token:
             raise RuntimeError(
                 "Appveyor API key not set.  Set via APPVEYOR_TOKEN environment"
                 " variable."
             )
-        return token
+        return {"appveyor": token}
 
     @property
     def repo_slug(self) -> str:
