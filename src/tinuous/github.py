@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 import re
 from shutil import rmtree
-import subprocess
 import tempfile
 from typing import Dict, Iterator, List, Optional, Tuple
 from zipfile import ZipFile
@@ -18,7 +17,14 @@ from pydantic import BaseModel, Field
 import requests
 
 from .base import APIClient, Artifact, BuildAsset, BuildLog, CISystem, EventType
-from .util import ensure_aware, expand_template, iterfiles, log, stream_to_file
+from .util import (
+    ensure_aware,
+    expand_template,
+    get_github_token,
+    iterfiles,
+    log,
+    stream_to_file,
+)
 
 
 class GitHubActions(CISystem):
@@ -26,21 +32,8 @@ class GitHubActions(CISystem):
     hash2pr: Dict[str, str] = Field(default_factory=dict)
 
     @staticmethod
-    def get_auth_token() -> str:
-        token = os.environ.get("GITHUB_TOKEN")
-        if not token:
-            r = subprocess.run(
-                ["git", "config", "hub.oauthtoken"],
-                stdout=subprocess.PIPE,
-                universal_newlines=True,
-            )
-            if r.returncode != 0 or not r.stdout.strip():
-                raise RuntimeError(
-                    "GitHub OAuth token not set.  Set via GITHUB_TOKEN"
-                    " environment variable or hub.oauthtoken Git config option."
-                )
-            token = r.stdout.strip()
-        return token
+    def get_auth_tokens() -> Dict[str, str]:
+        return {"github": get_github_token()}
 
     @cached_property
     def client(self) -> Github:

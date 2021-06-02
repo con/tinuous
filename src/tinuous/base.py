@@ -86,7 +86,7 @@ class CISystem(ABC, BaseModel):
 
     @staticmethod
     @abstractmethod
-    def get_auth_token() -> str:
+    def get_auth_tokens() -> Dict[str, str]:
         ...  # pragma: no cover
 
     @abstractmethod

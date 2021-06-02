@@ -1,7 +1,9 @@
 from collections import deque
 from datetime import datetime, timezone
 import logging
+import os
 from pathlib import Path
+import subprocess
 from typing import Dict, Iterator, cast
 
 import requests
@@ -54,3 +56,20 @@ def expand_template(
 
 def fstring(s: str, **kwargs: str) -> str:
     return cast(str, eval(f"f{s!r}", {}, kwargs))
+
+
+def get_github_token() -> str:
+    token = os.environ.get("GITHUB_TOKEN")
+    if not token:
+        r = subprocess.run(
+            ["git", "config", "hub.oauthtoken"],
+            stdout=subprocess.PIPE,
+            universal_newlines=True,
+        )
+        if r.returncode != 0 or not r.stdout.strip():
+            raise RuntimeError(
+                "GitHub OAuth token not set.  Set via GITHUB_TOKEN"
+                " environment variable or hub.oauthtoken Git config option."
+            )
+        token = r.stdout.strip()
+    return token

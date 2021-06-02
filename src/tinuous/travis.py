@@ -6,14 +6,18 @@ from typing import Any, Dict, Iterator, List, Optional
 from urllib.parse import quote
 
 from dateutil.parser import isoparse
+from github import Github
+from github.Repository import Repository
 
 from .base import APIClient, BuildAsset, BuildLog, CISystem, EventType
-from .util import log, removeprefix, stream_to_file
+from .util import get_github_token, log, removeprefix, stream_to_file
 
 
 class Travis(CISystem):
+    gh_token: str
+
     @staticmethod
-    def get_auth_token() -> str:
+    def get_auth_tokens() -> Dict[str, str]:
         token = os.environ.get("TRAVIS_TOKEN")
         if not token:
             try:
@@ -37,7 +41,7 @@ class Travis(CISystem):
                     " information."
                 )
             token = r.stdout.strip()
-        return token
+        return {"travis": token, "github": get_github_token()}
 
     @cached_property
     def client(self) -> APIClient:
@@ -48,6 +52,10 @@ class Travis(CISystem):
                 "Authorization": f"token {self.token}",
             },
         )
+
+    @cached_property
+    def ghrepo(self) -> Repository:
+        return Github(self.gh_token).get_repo(self.repo)
 
     def paginate(
         self, path: str, params: Optional[Dict[str, str]] = None
@@ -69,7 +77,11 @@ class Travis(CISystem):
             f"/repo/{quote(self.repo, safe='')}/builds",
             params={"include": "build.jobs"},
         ):
-            run_event = EventType.from_travis_event(build["event_type"])
+            event_type = EventType.from_travis_event(build["event_type"])
+            if event_type is None:
+                raise ValueError(
+                    f"Build has unknown event type {build['event_type']!r}"
+                )
             if build["started_at"] is None:
                 ### TODO: If there are any builds with a higher number that
                 ### have already started and finished, this can lead to the
@@ -86,11 +98,31 @@ class Travis(CISystem):
             else:
                 log.info("Found build %s", build["number"])
                 self.register_build(ts, True)
-                if run_event in event_types:
+                if event_type in event_types:
+                    commit = self.get_commit(build, event_type)
                     for job in build["jobs"]:
-                        yield TravisJobLog.from_job(self.client, build, job)
+                        yield TravisJobLog.from_job(
+                            self.client, build, job, commit, event_type
+                        )
                 else:
                     log.info("Event type is %r; skipping", build["event_type"])
+
+    def get_commit(self, build: Dict[str, Any], event_type: EventType) -> Optional[str]:
+        if event_type in (EventType.CRON, EventType.PUSH):
+            commit = build["commit"]["sha"]
+            assert isinstance(commit, str)
+            return commit
+        elif event_type is EventType.PULL_REQUEST:
+            pr = self.ghrepo.get_pull(build["pull_request_number"])
+            if pr.merge_commit_sha == build["commit"]["sha"]:
+                return pr.head.sha
+            else:
+                log.info(
+                    "Could not determine PR head commit for build; setting to 'UNK'"
+                )
+                return None
+        else:
+            raise AssertionError(f"Unhandled EventType: {event_type!r}")
 
 
 class TravisJobLog(BuildLog):
@@ -103,28 +135,23 @@ class TravisJobLog(BuildLog):
         client: APIClient,
         build: Dict[str, Any],
         job: Dict[str, Any],
+        commit: Optional[str],
+        event_type: EventType,
     ) -> "TravisJobLog":
         created_at = isoparse(build["started_at"])
-        event = EventType.from_travis_event(build["event_type"])
-        if event is None:
-            raise ValueError(f"Build has unknown event type {build['event_type']!r}")
         event_id: str
-        commit: Optional[str]
-        if event is EventType.CRON:
+        if event_type is EventType.CRON:
             event_id = created_at.strftime("%Y%m%dT%H%M%S")
-            commit = build["commit"]["sha"]
-        elif event is EventType.PUSH:
+        elif event_type is EventType.PUSH:
             event_id = build["branch"]["name"]
-            commit = build["commit"]["sha"]
-        elif event is EventType.PULL_REQUEST:
+        elif event_type is EventType.PULL_REQUEST:
             event_id = str(build["pull_request_number"])
-            commit = None
         else:
-            raise AssertionError(f"Unhandled EventType: {event!r}")
+            raise AssertionError(f"Unhandled EventType: {event_type!r}")
         return cls(
             client=client,
             created_at=created_at,
-            event_type=event,
+            event_type=event_type,
             event_id=event_id,
             build_commit=build["commit"]["sha"],
             commit=commit,

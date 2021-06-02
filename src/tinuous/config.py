@@ -22,11 +22,13 @@ class CIConfig(NoExtraModel, ABC):
 
     @staticmethod
     @abstractmethod
-    def get_auth_token() -> str:
+    def get_auth_tokens() -> Dict[str, str]:
         ...  # pragma: no cover
 
     @abstractmethod
-    def get_system(self, repo: str, since: datetime, token: str) -> CISystem:
+    def get_system(
+        self, repo: str, since: datetime, tokens: Dict[str, str]
+    ) -> CISystem:
         ...  # pragma: no cover
 
 
@@ -36,28 +38,31 @@ class GitHubConfig(CIConfig):
     workflows: Optional[List[str]] = None
 
     @staticmethod
-    def get_auth_token() -> str:
-        return GitHubActions.get_auth_token()
+    def get_auth_tokens() -> Dict[str, str]:
+        return GitHubActions.get_auth_tokens()
 
-    def get_system(self, repo: str, since: datetime, token: str) -> GitHubActions:
+    def get_system(
+        self, repo: str, since: datetime, tokens: Dict[str, str]
+    ) -> GitHubActions:
         return GitHubActions(
             repo=repo,
             since=since,
-            token=token,
+            token=tokens["github"],
             workflows=self.workflows,
         )
 
 
 class TravisConfig(CIConfig):
     @staticmethod
-    def get_auth_token() -> str:
-        return Travis.get_auth_token()
+    def get_auth_tokens() -> Dict[str, str]:
+        return Travis.get_auth_tokens()
 
-    def get_system(self, repo: str, since: datetime, token: str) -> Travis:
+    def get_system(self, repo: str, since: datetime, tokens: Dict[str, str]) -> Travis:
         return Travis(
             repo=repo,
             since=since,
-            token=token,
+            token=tokens["travis"],
+            gh_token=tokens["github"],
         )
 
 
@@ -66,14 +71,16 @@ class AppveyorConfig(CIConfig):
     projectSlug: Optional[str] = None
 
     @staticmethod
-    def get_auth_token() -> str:
-        return Appveyor.get_auth_token()
+    def get_auth_tokens() -> Dict[str, str]:
+        return Appveyor.get_auth_tokens()
 
-    def get_system(self, repo: str, since: datetime, token: str) -> Appveyor:
+    def get_system(
+        self, repo: str, since: datetime, tokens: Dict[str, str]
+    ) -> Appveyor:
         return Appveyor(
             repo=repo,
             since=since,
-            token=token,
+            token=tokens["appveyor"],
             accountName=self.accountName,
             projectSlug=self.projectSlug,
         )
