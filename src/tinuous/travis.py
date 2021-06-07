@@ -118,8 +118,9 @@ class Travis(CISystem):
             # merge commit is the commit that was the PR head at the time.
             try:
                 build_commit = self.ghrepo.get_commit(build["commit"]["sha"])
+                assert len(build_commit.parents) == 2
                 return build_commit.parents[1].sha
-            except (IndexError, UnknownObjectException):
+            except (AssertionError, UnknownObjectException):
                 log.info(
                     "Could not determine PR head commit for build; setting to 'UNK'"
                 )
