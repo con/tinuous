@@ -115,10 +115,10 @@ class GitHubActions(CISystem):
                 if data := r.json():
                     pr = str(data[0]["number"])
                 else:
-                    # The above endpoint ignores PRs not made to the default
-                    # branch, so we have to fall back to performing an issue
-                    # search to fill those in.  This should hopefully be used
-                    # sparingly, as there's a 30 searches per hour rate limit.
+                    # The above endpoint ignores PRs made from forks, so we
+                    # have to fall back to performing an issue search to fill
+                    # those in.  This should hopefully be used sparingly, as
+                    # there's a 30 searches per hour rate limit.
                     try:
                         pr = str(
                             self.client.search_issues(
