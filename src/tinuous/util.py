@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import logging
 import os
 from pathlib import Path
+import re
 import subprocess
 from typing import Dict, Iterator, cast
 
@@ -73,3 +74,7 @@ def get_github_token() -> str:
             )
         token = r.stdout.strip()
     return token
+
+
+def sanitize_pathname(s: str) -> str:
+    return re.sub(r'[\x5C/<>:|"?*]', "_", re.sub(r"\s", " ", s))

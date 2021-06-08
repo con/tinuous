@@ -105,9 +105,9 @@ class Travis(CISystem):
                 self.register_build(ts, True)
                 if event_type in event_types:
                     commit = self.get_commit(build, event_type)
-                    for job in build["jobs"]:
+                    for i, job in enumerate(build["jobs"], start=1):
                         yield TravisJobLog.from_job(
-                            self.client, build, job, commit, event_type
+                            self.client, build, job, i, commit, event_type
                         )
                 else:
                     log.info("Event type is %r; skipping", build["event_type"])
@@ -136,6 +136,7 @@ class Travis(CISystem):
 class TravisJobLog(BuildLog):
     job: str
     job_id: int
+    index: int
 
     @classmethod
     def from_job(
@@ -143,6 +144,7 @@ class TravisJobLog(BuildLog):
         client: APIClient,
         build: Dict[str, Any],
         job: Dict[str, Any],
+        index: int,
         commit: Optional[str],
         event_type: EventType,
     ) -> "TravisJobLog":
@@ -167,6 +169,7 @@ class TravisJobLog(BuildLog):
             job=removeprefix(job["number"], f"{build['number']}."),
             job_id=job["id"],
             status=job["state"],
+            index=index,
         )
 
     def path_fields(self) -> Dict[str, str]:
@@ -175,6 +178,7 @@ class TravisJobLog(BuildLog):
             {
                 "ci": "travis",
                 "job": self.job,
+                "job_index": str(self.index),
             }
         )
         return fields
