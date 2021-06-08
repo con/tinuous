@@ -35,7 +35,7 @@ Installation
     python3 -m pip install tinuous
 
 ``tinuous`` can also optionally integrate with Datalad_.  To install Datalad
-alongside ``tinuous``, specify the ``datalad`` extra:
+alongside ``tinuous``, specify the ``datalad`` extra::
 
     python3 -m pip install "tinuous[datalad]"
 
@@ -114,20 +114,20 @@ The configuration file is a YAML file containing a mapping with the following
 keys:
 
 ``repo``
-    The GitHub repository to retrieve assets for, in the form ``OWNER/NAME``
+    *(required)* The GitHub repository to retrieve assets for, in the form ``OWNER/NAME``
 
 ``vars``
-    *(optional)* A mapping defining custom path template placeholders.  Each
-    key is the name of a custom placeholder, without enclosing braces, and the
-    value is the string to substitute in its place.  Custom values may contain
-    standard path template placeholders as well as other custom placeholders
-    defined earlier in the mapping.
+    A mapping defining custom path template placeholders.  Each key is the name
+    of a custom placeholder, without enclosing braces, and the value is the
+    string to substitute in its place.  Custom values may contain standard path
+    template placeholders as well as other custom placeholders defined earlier
+    in the mapping.
 
 ``ci``
-    A mapping from the names of the CI systems from which to retrieve assets to
-    sub-mappings containing CI-specific configuration.  Including a given CI
-    system is optional; assets will be fetched from a given system if & only if
-    it is listed in this mapping.
+    *(required)* A mapping from the names of the CI systems from which to
+    retrieve assets to sub-mappings containing CI-specific configuration.
+    Including a given CI system is optional; assets will be fetched from a
+    given system if & only if it is listed in this mapping.
 
     The CI systems and their sub-mappings are as follows:
 
@@ -135,61 +135,81 @@ keys:
         Configuration for retrieving assets from GitHub Actions.  Subfields:
 
         ``path``
-            A template string that will be instantiated for each workflow run
-            to produce the path for the directory (relative to the current
-            working directory) under which the run's build logs will be saved.
-            See "`Path Templates`_" for more information.
+            *(required)* A template string that will be instantiated for each
+            workflow run to produce the path for the directory (relative to the
+            current working directory) under which the run's build logs will be
+            saved.  See "`Path Templates`_" for more information.
 
         ``artifacts_path``
-            *(optional)* A template string that will be instantiated for each
-            workflow run to produce the path for the directory (relative to the
-            current working directory) under which the run's artifacts will be
-            saved.  If this is not specified, no artifacts will be downloaded.
+            A template string that will be instantiated for each workflow run
+            to produce the path for the directory (relative to the current
+            working directory) under which the run's artifacts will be saved.
+            If this is not specified, no artifacts will be downloaded.
 
         ``releases_path``
-            *(optional)* A template string that will be instantiated for each
+            A template string that will be instantiated for each
             (non-draft, non-prerelease) GitHub release to produce the path for
             the directory (relative to the current working directory) under
             which the release's assets will be saved.  If this is not
             specified, no release assets will be downloaded.
 
         ``workflows``
-            *(optional)* A list of the filenames for the workflows for which to
-            retrieve assets.  The filenames should only consist of the workflow
-            basenames, including the file extension (e.g., ``test.yml``, not
-            ``.github/workflows/test.yml``).  When ``workflows`` is not
-            specified, assets are retrieved for all workflows in the repository.
+            A specification of the workflows for which to retrieve assets.
+            This can be either a list of workflow basenames, including the file
+            extension (e.g., ``test.yml``, not ``.github/workflows/test.yml``)
+            or a mapping containing the following fields:
+
+                ``include``
+                    A list of workflows to retrieve assets for, given as either
+                    basenames or (when ``regex`` is true) regular expressions
+                    to match against basenames.  If ``include`` is omitted, it
+                    defaults to including all workflows.
+
+                ``exclude``
+                    A list of workflows to not retrieve assets for, given as
+                    either basenames or (when ``regex`` is true) regular
+                    expressions to match against basenames.  If ``exclude`` is
+                    omitted, no workflows are excluded.  Workflows that match
+                    both ``include`` and ``exclude`` are excluded.
+
+                ``regex``
+                    A boolean.  If true (default false), the elements of the
+                    ``include`` and ``exclude`` fields are treated as regular
+                    expressions that are matched (unanchored) against workflow
+                    basenames; if false, they are used as exact names
+
+            When ``workflows`` is not specified, assets are retrieved for all
+            workflows in the repository.
 
     ``travis``
         Configuration for retrieving logs from Travis-CI.com.  Subfield:
 
         ``path``
-            A template string that will be instantiated for each job of each
-            build to produce the path for the file (relative to the current
-            working directory) in which the job's logs will be saved.  See
-            "`Path Templates`_" for more information.
+            *(required)* A template string that will be instantiated for each
+            job of each build to produce the path for the file (relative to the
+            current working directory) in which the job's logs will be saved.
+            See "`Path Templates`_" for more information.
 
     ``appveyor``
         Configuration for retrieving logs from Appveyor.  Subfields:
 
         ``path``
-            A template string that will be instantiated for each job of each
-            build to produce the path for the file (relative to the current
-            working directory) in which the job's logs will be saved.  See
-            "`Path Templates`_" for more information.
+            *(required)* A template string that will be instantiated for each
+            job of each build to produce the path for the file (relative to the
+            current working directory) in which the job's logs will be saved.
+            See "`Path Templates`_" for more information.
 
         ``accountName``
-            The name of the Appveyor account to which the repository belongs on
-            Appveyor
+            *(required)* The name of the Appveyor account to which the
+            repository belongs on Appveyor
 
         ``projectSlug``
-            *(optional)* The project slug for the repository on Appveyor; if
-            not specified, it is assumed that the slug is the same as the
-            repository name
+            The project slug for the repository on Appveyor; if not specified,
+            it is assumed that the slug is the same as the repository name
 
 ``since``
-    A timestamp (date, time, & timezone); only assets for builds started after
-    the given point in time will be retrieved
+    *(required)* A timestamp (date, time, & timezone); only assets for builds
+    started after the given point in time will be retrieved
 
     As the script retrieves new build assets, it keeps track of their starting
     points.  Once the assets for all builds for the given CI system &
@@ -198,12 +218,12 @@ keys:
     ``since`` value for the respective CI system on subsequent runs.
 
 ``until``
-    *(optional)* A timestamp (date, time, & timezone); only assets for builds
-    started before the given point in time will be retrieved
+    A timestamp (date, time, & timezone); only assets for builds started before
+    the given point in time will be retrieved
 
 ``types``
-    A list of build trigger event types; only assets for builds triggered by
-    one of the given events will be retrieved
+    *(required)* A list of build trigger event types; only assets for builds
+    triggered by one of the given events will be retrieved
 
     The recognized event types are:
 
@@ -217,35 +237,31 @@ keys:
         A build in response to new commits
 
 ``secrets``
-    *(optional)* A mapping from names (used in log messages) to regexes
-    matching secrets to sanitize
+    A mapping from names (used in log messages) to regexes matching secrets to
+    sanitize
 
 ``allow-secrets-regex``
-    *(optional)* Any strings that match a ``secrets`` regex and also match this
-    regex will not be sanitized.  Note that ``allow-secrets-regex`` is tested
-    against just the substring that matched a ``secrets`` regex without any
-    surrounding text, and so lookahead and lookbehind will not work in this
-    regex.
+    Any strings that match a ``secrets`` regex and also match this regex will
+    not be sanitized.  Note that ``allow-secrets-regex`` is tested against just
+    the substring that matched a ``secrets`` regex without any surrounding
+    text, and so lookahead and lookbehind will not work in this regex.
 
 ``datalad``
-    *(optional)* A sub-mapping describing integration of ``tinuous`` with
-    Datalad_.  Subfields:
+    A sub-mapping describing integration of ``tinuous`` with Datalad_.
+    Subfields:
 
     ``enabled``
-        *(optional)* A boolean.  If true (default false), Datalad must be
-        installed, the current directory will be converted into a Datalad
-        dataset if it is not one already, the assets will optionally be divided
-        up into subdatasets, and all new assets will be committed at the end of
-        a run of ``tinuous fetch``.  ``path`` template strings may contain
-        ``//`` separators indicating the boundaries of subdatasets.
+        A boolean.  If true (default false), Datalad must be installed, the
+        current directory will be converted into a Datalad dataset if it is not
+        one already, the assets will optionally be divided up into subdatasets,
+        and all new assets will be committed at the end of a run of ``tinuous
+        fetch``.  ``path`` template strings may contain ``//`` separators
+        indicating the boundaries of subdatasets.
 
     ``cfg_proc``
-        *(optional)* Procedure to run on the dataset & subdatasets when
-        creating them
+        Procedure to run on the dataset & subdatasets when creating them
 
     .. _Datalad: https://www.datalad.org
-
-All fields are required unless stated otherwise.
 
 A sample config file:
 

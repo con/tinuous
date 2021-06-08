@@ -1,21 +1,15 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 import re
-from typing import Dict, Iterator, List, Optional, Pattern, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Pattern, Tuple
 
-from pydantic import BaseModel, Field, validator
+from pydantic import Field, validator
 from pydantic.fields import ModelField
 
 from .appveyor import Appveyor
-from .base import CISystem, EventType
+from .base import CISystem, EventType, NoExtraModel, WorkflowSpec
 from .github import GitHubActions
 from .travis import Travis
-
-
-class NoExtraModel(BaseModel):
-    class Config:
-        allow_population_by_field_name = True
-        extra = "forbid"
 
 
 class CIConfig(NoExtraModel, ABC):
@@ -40,7 +34,14 @@ class CIConfig(NoExtraModel, ABC):
 class GitHubConfig(CIConfig):
     artifacts_path: Optional[str] = None
     releases_path: Optional[str] = None
-    workflows: Optional[List[str]] = None
+    workflows: WorkflowSpec = Field(default_factory=WorkflowSpec)
+
+    @validator("workflows", pre=True)
+    def _workflow_list(cls, v: Any) -> Any:  # noqa: B902, U100
+        if isinstance(v, list):
+            return {"include": v}
+        else:
+            return v
 
     @staticmethod
     def get_auth_tokens() -> Dict[str, str]:
@@ -58,7 +59,7 @@ class GitHubConfig(CIConfig):
             since=since,
             until=until,
             token=tokens["github"],
-            workflows=self.workflows,
+            workflow_spec=self.workflows,
         )
 
 
