@@ -4,6 +4,7 @@ import re
 from typing import Dict, Iterator, List, Optional, Pattern, Tuple
 
 from pydantic import BaseModel, Field, validator
+from pydantic.fields import ModelField
 
 from .appveyor import Appveyor
 from .base import CISystem, EventType
@@ -27,7 +28,11 @@ class CIConfig(NoExtraModel, ABC):
 
     @abstractmethod
     def get_system(
-        self, repo: str, since: datetime, tokens: Dict[str, str]
+        self,
+        repo: str,
+        since: datetime,
+        until: Optional[datetime],
+        tokens: Dict[str, str],
     ) -> CISystem:
         ...  # pragma: no cover
 
@@ -42,11 +47,16 @@ class GitHubConfig(CIConfig):
         return GitHubActions.get_auth_tokens()
 
     def get_system(
-        self, repo: str, since: datetime, tokens: Dict[str, str]
+        self,
+        repo: str,
+        since: datetime,
+        until: Optional[datetime],
+        tokens: Dict[str, str],
     ) -> GitHubActions:
         return GitHubActions(
             repo=repo,
             since=since,
+            until=until,
             token=tokens["github"],
             workflows=self.workflows,
         )
@@ -57,10 +67,17 @@ class TravisConfig(CIConfig):
     def get_auth_tokens() -> Dict[str, str]:
         return Travis.get_auth_tokens()
 
-    def get_system(self, repo: str, since: datetime, tokens: Dict[str, str]) -> Travis:
+    def get_system(
+        self,
+        repo: str,
+        since: datetime,
+        until: Optional[datetime],
+        tokens: Dict[str, str],
+    ) -> Travis:
         return Travis(
             repo=repo,
             since=since,
+            until=until,
             token=tokens["travis"],
             gh_token=tokens["github"],
         )
@@ -75,11 +92,16 @@ class AppveyorConfig(CIConfig):
         return Appveyor.get_auth_tokens()
 
     def get_system(
-        self, repo: str, since: datetime, tokens: Dict[str, str]
+        self,
+        repo: str,
+        since: datetime,
+        until: Optional[datetime],
+        tokens: Dict[str, str],
     ) -> Appveyor:
         return Appveyor(
             repo=repo,
             since=since,
+            until=until,
             token=tokens["appveyor"],
             accountName=self.accountName,
             projectSlug=self.projectSlug,
@@ -110,6 +132,7 @@ class Config(NoExtraModel):
     vars: Dict[str, str] = Field(default_factory=dict)
     ci: CIConfigDict
     since: datetime
+    until: Optional[datetime] = None
     types: List[EventType]
     secrets: Dict[str, Pattern] = Field(default_factory=dict)
     allow_secrets_regex: Optional[Pattern] = Field(None, alias="allow-secrets-regex")
@@ -121,8 +144,10 @@ class Config(NoExtraModel):
             raise ValueError("Repo must be in the form 'OWNER/NAME'")
         return v
 
-    @validator("since")
-    def _validate_since(cls, v: datetime) -> datetime:  # noqa: B902, U100
-        if v.tzinfo is None:
-            raise ValueError("'since' timestamp must include timezone offset")
+    @validator("since", "until")
+    def _validate_datetimes(
+        cls, v: Optional[datetime], field: ModelField  # noqa: B902, U100
+    ) -> Optional[datetime]:
+        if v is not None and v.tzinfo is None:
+            raise ValueError(f"{field.name!r} timestamp must include timezone offset")
         return v

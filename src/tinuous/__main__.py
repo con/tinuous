@@ -100,7 +100,9 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
             since = datetime.fromisoformat(since_stamps[name])
         except KeyError:
             since = cfg.since
-        ci = cicfg.get_system(repo=cfg.repo, since=since, tokens=tokens[name])
+        ci = cicfg.get_system(
+            repo=cfg.repo, since=since, until=cfg.until, tokens=tokens[name]
+        )
         for obj in ci.get_build_assets(cfg.types, artifacts=get_artifacts):
             if isinstance(obj, BuildLog):
                 path = obj.expand_path(cicfg.path, cfg.vars)
