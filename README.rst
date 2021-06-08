@@ -338,6 +338,11 @@ Placeholder          Definition
 ``{job}``            *(Travis and Appveyor only)* The number of the job,
                      without the build number prefix (Travis) or the job ID
                      string (Appveyor) [1]_
+``{job_index}``      *(Travis and Appveyor only)* The index of the job in the
+                     list returned by the API, starting from 1 [1]_
+``{job_env}``        *(Appveyor only)* The environment variables specific to
+                     the job [1]_
+``{job_env_hash}``   *(Appveyor only)* The SHA1 hash of ``{job_env}`` [1]_
 ===================  ==========================================================
 
 .. [1] These placeholders are only available for ``path`` and

@@ -1,4 +1,5 @@
 from functools import cached_property
+from hashlib import sha1
 import os
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
@@ -6,7 +7,7 @@ from typing import Any, Dict, Iterator, List, Optional
 from dateutil.parser import isoparse
 
 from .base import APIClient, BuildAsset, BuildLog, CISystem, EventType
-from .util import log, stream_to_file
+from .util import log, removeprefix, sanitize_pathname, stream_to_file
 
 
 class Appveyor(CISystem):
@@ -69,17 +70,22 @@ class Appveyor(CISystem):
                 log.info("Found build %s", build["buildNumber"])
                 self.register_build(ts, True)
                 if run_event in event_types:
-                    for job in self.client.get(
-                        f"/api/projects/{self.accountName}/{self.repo_slug}"
-                        f"/build/{build['version']}"
-                    ).json()["build"]["jobs"]:
-                        yield AppveyorJobLog.from_job(self.client, build, job)
+                    for i, job in enumerate(
+                        self.client.get(
+                            f"/api/projects/{self.accountName}/{self.repo_slug}"
+                            f"/build/{build['version']}"
+                        ).json()["build"]["jobs"],
+                        start=1,
+                    ):
+                        yield AppveyorJobLog.from_job(self.client, build, job, i)
                 else:
                     log.info("Event type is %r; skipping", run_event.value)
 
 
 class AppveyorJobLog(BuildLog):
     job: str
+    index: int
+    envvars: str
 
     @classmethod
     def from_job(
@@ -87,6 +93,7 @@ class AppveyorJobLog(BuildLog):
         client: APIClient,
         build: Dict[str, Any],
         job: Dict[str, Any],
+        index: int,
     ) -> "AppveyorJobLog":
         created_at = isoparse(build["created"])
         if build.get("pullRequestId"):
@@ -107,6 +114,8 @@ class AppveyorJobLog(BuildLog):
             number=build["buildNumber"],
             job=job["jobId"],
             status=job["status"],
+            index=index,
+            envvars=removeprefix(job["name"], "Environment: "),
         )
 
     def path_fields(self) -> Dict[str, str]:
@@ -115,6 +124,9 @@ class AppveyorJobLog(BuildLog):
             {
                 "ci": "appveyor",
                 "job": self.job,
+                "job_index": str(self.index),
+                "job_env": sanitize_pathname(self.envvars),
+                "job_env_hash": sha1(self.envvars.encode("utf-8")).hexdigest(),
             }
         )
         return fields

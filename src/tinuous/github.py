@@ -3,7 +3,6 @@ from functools import cached_property
 from io import BytesIO
 import os
 from pathlib import Path
-import re
 from shutil import rmtree
 import tempfile
 from typing import Dict, Iterator, List, Optional, Tuple
@@ -23,6 +22,7 @@ from .util import (
     get_github_token,
     iterfiles,
     log,
+    sanitize_pathname,
     stream_to_file,
 )
 
@@ -192,7 +192,7 @@ class GHAAsset(BuildAsset):
         fields.update(
             {
                 "ci": "github",
-                "wf_name": re.sub(r'[\x5C/<>:|"?*]', "_", self.workflow_name),
+                "wf_name": sanitize_pathname(self.workflow_name),
                 "wf_file": self.workflow_file,
                 "run_id": str(self.run_id),
             }
