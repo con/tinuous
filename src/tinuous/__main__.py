@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from in_place import InPlace
 from yaml import safe_load
 
+from . import __version__
 from .base import Artifact, BuildLog
 from .config import Config, GitHubConfig
 from .github import GitHubActions
@@ -18,6 +19,12 @@ from .util import log
 
 
 @click.group()
+@click.version_option(
+    __version__,
+    "-V",
+    "--version",
+    message="%(prog)s %(version)s",
+)
 @click.option(
     "-c",
     "--config",
