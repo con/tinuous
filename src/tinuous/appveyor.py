@@ -53,7 +53,9 @@ class Appveyor(CISystem):
     def get_build_assets(
         self, event_types: List[EventType], artifacts: bool = False  # noqa: U100
     ) -> Iterator["BuildAsset"]:
-        log.info("Fetching runs newer than %s", self.since)
+        log.info("Fetching builds newer than %s", self.since)
+        if self.until is not None:
+            log.info("Skipping builds newer than %s", self.until)
         for build in self.get_builds():
             if build.get("pullRequestId"):
                 run_event = EventType.PULL_REQUEST
@@ -62,6 +64,8 @@ class Appveyor(CISystem):
             ts = isoparse(build["created"])
             if ts <= self.since:
                 break
+            elif self.until is not None and ts > self.until:
+                log.info("Build %s is too new; skipping", build["buildNumber"])
             elif build.get("finished") is None:
                 log.info("Build %s not completed; skipping", build["buildNumber"])
                 self.register_build(ts, False)

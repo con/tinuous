@@ -74,6 +74,8 @@ class Travis(CISystem):
         self, event_types: List[EventType], artifacts: bool = False  # noqa: U100
     ) -> Iterator["BuildAsset"]:
         log.info("Fetching builds newer than %s", self.since)
+        if self.until is not None:
+            log.info("Skipping builds newer than %s", self.until)
         for build in self.paginate(
             f"/repo/{quote(self.repo, safe='')}/builds",
             params={"include": "build.jobs"},
@@ -93,6 +95,8 @@ class Travis(CISystem):
                 ts = isoparse(build["started_at"])
             if ts <= self.since:
                 break
+            elif self.until is not None and ts > self.until:
+                log.info("Build %s is too new; skipping", build["number"])
             elif build["finished_at"] is None:
                 log.info("Build %s not completed; skipping", build["number"])
                 self.register_build(ts, False)

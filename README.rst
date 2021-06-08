@@ -197,6 +197,10 @@ keys:
     the latest such build is stored in the state file and used as the new
     ``since`` value for the respective CI system on subsequent runs.
 
+``until``
+    *(optional)* A timestamp (date, time, & timezone); only assets for builds
+    started before the given point in time will be retrieved
+
 ``types``
     A list of build trigger event types; only assets for builds triggered by
     one of the given events will be retrieved

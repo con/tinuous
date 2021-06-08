@@ -82,6 +82,7 @@ class CISystem(ABC, BaseModel):
     repo: str
     token: str
     since: datetime
+    until: Optional[datetime]
     fetched: List[Tuple[datetime, bool]] = Field(default_factory=list)
 
     @staticmethod

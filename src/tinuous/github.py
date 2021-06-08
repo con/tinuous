@@ -65,6 +65,8 @@ class GitHubActions(CISystem):
         self, event_types: List[EventType], artifacts: bool = False
     ) -> Iterator["BuildAsset"]:
         log.info("Fetching runs newer than %s", self.since)
+        if self.until is not None:
+            log.info("Skipping runs newer than %s", self.until)
         for wf in self.get_workflows():
             log.info("Fetching runs for workflow %s (%s)", wf.path, wf.name)
             for run in wf.get_runs():
@@ -72,6 +74,8 @@ class GitHubActions(CISystem):
                 ts = ensure_aware(run.created_at)
                 if ts <= self.since:
                     break
+                elif self.until is not None and ts > self.until:
+                    log.info("Run %s is too new; skipping", run.run_number)
                 elif run.status != "completed":
                     log.info("Run %s not completed; skipping", run.run_number)
                     self.register_build(ts, False)
@@ -146,6 +150,8 @@ class GitHubActions(CISystem):
 
     def get_release_assets(self) -> Iterator["GHReleaseAsset"]:
         log.info("Fetching releases newer than %s", self.since)
+        if self.until is not None:
+            log.info("Skipping releases newer than %s", self.until)
         for rel in self.ghrepo.get_releases():
             if rel.draft:
                 log.info("Release %s is draft; skipping", rel.tag_name)
@@ -154,7 +160,7 @@ class GitHubActions(CISystem):
                 log.info("Release %s is prerelease; skipping", rel.tag_name)
                 continue
             ts = ensure_aware(rel.published_at)
-            if ts <= self.since:
+            if ts <= self.since or (self.until is not None and ts > self.until):
                 continue
             self.register_build(ts, True)  # TODO: Set to False for drafts?
             log.info("Found release %s", rel.tag_name)
