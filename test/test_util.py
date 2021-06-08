@@ -1,4 +1,5 @@
-from tinuous.util import expand_template
+import pytest
+from tinuous.util import expand_template, parse_slice
 
 
 def test_expand_template() -> None:
@@ -24,3 +25,36 @@ def test_expand_template_sliced() -> None:
         )
         == "1234567/A test"
     )
+
+
+def test_expand_template_unused_bad() -> None:
+    assert (
+        expand_template(
+            "{cleesh}",
+            {"description": "A test commit"},
+            {"bad": "{undefined}", "cleesh": "{description[:6]}"},
+        )
+        == "A test"
+    )
+
+
+@pytest.mark.parametrize(
+    "s,sl",
+    [
+        (":", slice(None)),
+        ("::", slice(None)),
+        ("23:", slice(23, None)),
+        ("23::", slice(23, None)),
+        (":42", slice(42)),
+        (":42:", slice(42)),
+        ("23:42", slice(23, 42)),
+        ("23:42:", slice(23, 42)),
+        ("::5", slice(None, None, 5)),
+        ("23::5", slice(23, None, 5)),
+        (":42:5", slice(None, 42, 5)),
+        ("23:42:5", slice(23, 42, 5)),
+        ("-23:-42:-5", slice(-23, -42, -5)),
+    ],
+)
+def test_parse_slice(s: str, sl: slice) -> None:
+    assert parse_slice(s) == sl
