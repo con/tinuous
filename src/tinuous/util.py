@@ -48,6 +48,14 @@ def iterfiles(dirpath: Path) -> Iterator[Path]:
 
 
 class LazySlicingFormatter(Formatter):
+    """
+    A `string.Formatter` subclass that:
+
+    - accepts a second set of format kwargs that can refer to the main kwargs
+      or each other and are only templated as needed
+    - supports indexing strings & other sequences with slices
+    """
+
     def __init__(self, var_defs: Dict[str, str]):
         self.var_defs: Dict[str, str] = var_defs
         self.expanded_vars: Dict[str, str] = {}
@@ -73,7 +81,9 @@ class LazySlicingFormatter(Formatter):
     ) -> Any:
         m = re.match(r"\w+", field_name)
         assert m, f"format field name {field_name!r} does not start with arg_name"
-        key = m.group()
+        key: Union[int, str] = m.group()
+        if key.isdigit():
+            key = int(key)
         obj = self.get_value(key, args, kwargs)
         s = field_name[m.end() :]
         while s:

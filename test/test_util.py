@@ -1,5 +1,8 @@
+from types import SimpleNamespace
+from typing import Any, Dict
 import pytest
-from tinuous.util import expand_template, parse_slice
+from pytest_mock import MockerFixture
+from tinuous.util import LazySlicingFormatter, expand_template, parse_slice
 
 
 def test_expand_template() -> None:
@@ -58,3 +61,35 @@ def test_expand_template_unused_bad() -> None:
 )
 def test_parse_slice(s: str, sl: slice) -> None:
     assert parse_slice(s) == sl
+
+
+@pytest.mark.parametrize(
+    "fmt,args,kwargs,result",
+    [
+        ("{0}", ["foo"], {}, "foo"),
+        (
+            "{foo.bar.baz}",
+            [],
+            {"foo": SimpleNamespace(bar=SimpleNamespace(baz="quux"))},
+            "quux",
+        ),
+        ("{foo[1][2]}", [], {"foo": ["abc", "def", "ghi"]}, "f"),
+        ("{foo[bar][baz]}", [], {"foo": {"bar": {"baz": "quux"}}}, "quux"),
+    ],
+)
+def test_lazy_slicing_formatter_basics(
+    fmt: str, args: list, kwargs: Dict[str, Any], result: str
+) -> None:
+    assert LazySlicingFormatter({}).format(fmt, *args, **kwargs) == result
+
+
+def test_lazy_slicing_formatter_undef_key() -> None:
+    with pytest.raises(KeyError):
+        LazySlicingFormatter({}).format("{foo}", bar=42)
+
+
+def test_lazy_slicing_formatter_var_reuse(mocker: MockerFixture) -> None:
+    fmter = LazySlicingFormatter({"foo": "bar"})
+    spy = mocker.spy(fmter, "format")
+    assert fmter.format("-{foo}-{foo}-") == "-bar-bar-"
+    assert spy.call_args_list == [mocker.call("-{foo}-{foo}-"), mocker.call("bar")]
