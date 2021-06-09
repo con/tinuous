@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from shutil import rmtree
 import tempfile
-from typing import Dict, Iterator, List, Optional, Tuple
+from typing import Dict, Iterator, List, Tuple
 from zipfile import ZipFile
 
 from github import Github
@@ -15,20 +15,29 @@ from github.WorkflowRun import WorkflowRun
 from pydantic import BaseModel, Field
 import requests
 
-from .base import APIClient, Artifact, BuildAsset, BuildLog, CISystem, EventType
+from .base import (
+    APIClient,
+    Artifact,
+    BuildAsset,
+    BuildLog,
+    CISystem,
+    EventType,
+    WorkflowSpec,
+)
 from .util import (
     ensure_aware,
     expand_template,
     get_github_token,
     iterfiles,
     log,
+    removeprefix,
     sanitize_pathname,
     stream_to_file,
 )
 
 
 class GitHubActions(CISystem):
-    workflows: Optional[List[str]] = None
+    workflow_spec: WorkflowSpec
     hash2pr: Dict[str, str] = Field(default_factory=dict)
 
     @staticmethod
@@ -55,11 +64,9 @@ class GitHubActions(CISystem):
         return self.client.get_repo(self.repo)
 
     def get_workflows(self) -> Iterator[Workflow]:
-        if self.workflows is None:
-            yield from self.ghrepo.get_workflows()
-        else:
-            for wffile in self.workflows:
-                yield self.ghrepo.get_workflow(wffile)
+        for wf in self.ghrepo.get_workflows():
+            if self.workflow_spec.match(removeprefix(wf.path, ".github/workflows/")):
+                yield wf
 
     def get_build_assets(
         self, event_types: List[EventType], artifacts: bool = False

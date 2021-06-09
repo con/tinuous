@@ -4,10 +4,11 @@ from enum import Enum
 from functools import cached_property
 import heapq
 from pathlib import Path
+import re
 from time import sleep
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Pattern, Tuple, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 import requests
 
 from .util import expand_template, log
@@ -161,3 +162,34 @@ class BuildLog(BuildAsset):
 
 class Artifact(BuildAsset):
     pass
+
+
+# These config-related classes need to go in this file to avoid a circular
+# import issue:
+
+
+class NoExtraModel(BaseModel):
+    class Config:
+        allow_population_by_field_name = True
+        extra = "forbid"
+
+
+class WorkflowSpec(NoExtraModel):
+    regex: bool = False
+    # Workflow names are stored as compiled regexes regardless of whether
+    # `regex` is true in order to keep type-checking simple.
+    include: List[Pattern] = Field(default_factory=lambda: [re.compile(".*")])
+    exclude: List[Pattern] = Field(default_factory=list)
+
+    @validator("include", "exclude", pre=True, each_item=True)
+    def _maybe_regex(
+        cls, v: Union[str, Pattern], values: Dict[str, Any]  # noqa: B902, U100
+    ) -> Union[str, Pattern]:
+        if not values["regex"] and isinstance(v, str):
+            v = r"\A" + re.escape(v) + r"\Z"
+        return v
+
+    def match(self, s: str) -> bool:
+        return any(r.search(s) for r in self.include) and not any(
+            r.search(s) for r in self.exclude
+        )
