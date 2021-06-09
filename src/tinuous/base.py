@@ -176,6 +176,8 @@ class NoExtraModel(BaseModel):
 
 class WorkflowSpec(NoExtraModel):
     regex: bool = False
+    # Workflow names are stored as compiled regexes regardless of whether
+    # `regex` is true in order to keep type-checking simple.
     include: List[Pattern] = Field(default_factory=lambda: [re.compile(".*")])
     exclude: List[Pattern] = Field(default_factory=list)
 
