@@ -4,8 +4,9 @@ import logging
 import os
 from pathlib import Path
 import re
+from string import Formatter
 import subprocess
-from typing import Dict, Iterator, cast
+from typing import Any, Dict, Iterator, Mapping, Optional, Sequence, Union
 
 import requests
 
@@ -46,17 +47,88 @@ def iterfiles(dirpath: Path) -> Iterator[Path]:
                 yield p
 
 
+class LazySlicingFormatter(Formatter):
+    """
+    A `string.Formatter` subclass that:
+
+    - accepts a second set of format kwargs that can refer to the main kwargs
+      or each other and are only templated as needed
+    - supports indexing strings & other sequences with slices
+    """
+
+    def __init__(self, var_defs: Dict[str, str]):
+        self.var_defs: Dict[str, str] = var_defs
+        self.expanded_vars: Dict[str, str] = {}
+        super().__init__()
+
+    def get_value(
+        self, key: Union[int, str], args: Sequence[Any], kwargs: Mapping[str, Any]
+    ) -> Any:
+        if isinstance(key, int):
+            return args[key]
+        elif key in kwargs:
+            return kwargs[key]
+        elif key in self.expanded_vars:
+            return self.expanded_vars[key]
+        elif key in self.var_defs:
+            self.expanded_vars[key] = self.format(self.var_defs[key], **kwargs)
+            return self.expanded_vars[key]
+        else:
+            raise KeyError(key)
+
+    def get_field(
+        self, field_name: str, args: Sequence[Any], kwargs: Mapping[str, Any]
+    ) -> Any:
+        m = re.match(r"\w+", field_name)
+        assert m, f"format field name {field_name!r} does not start with arg_name"
+        key: Union[int, str] = m.group()
+        if key.isdigit():
+            key = int(key)
+        obj = self.get_value(key, args, kwargs)
+        s = field_name[m.end() :]
+        while s:
+            m = re.match(r"\.(?P<attr>\w+)|\[(?P<index>[^]]+)\]", s)
+            assert m, f"format field name {field_name!r} has invalid attr/index"
+            s = s[m.end() :]
+            attr, index = m.group("attr", "index")
+            if attr is not None:
+                obj = getattr(obj, attr)
+            else:
+                assert index is not None  # type: ignore[unreachable]
+                try:
+                    sl = parse_slice(index)
+                except ValueError:
+                    if index.isdigit():
+                        obj = obj[int(index)]
+                    else:
+                        obj = obj[index]
+                else:
+                    obj = obj[sl]
+        return obj, key
+
+
 def expand_template(
     template_str: str, fields: Dict[str, str], vars: Dict[str, str]
 ) -> str:
-    expanded_vars: Dict[str, str] = {}
-    for name, tmplt in vars.items():
-        expanded_vars[name] = fstring(tmplt, **fields, **expanded_vars)
-    return fstring(template_str, **fields, **expanded_vars)
+    return LazySlicingFormatter(vars).format(template_str, **fields)
 
 
-def fstring(s: str, **kwargs: str) -> str:
-    return cast(str, eval(f"f{s!r}", {}, kwargs))
+SLICE_RGX = re.compile(r"(?P<start>-?\d+)?:(?P<stop>-?\d+)?(?::(?P<step>-?\d+)?)?")
+
+
+def parse_slice(s: str) -> slice:
+    if m := SLICE_RGX.fullmatch(s):
+        s_start, s_stop, s_step = m.group("start", "stop", "step")
+        start: Optional[int] = None if s_start is None else int(s_start)
+        stop: Optional[int] = None if s_stop is None else int(s_stop)
+        step: Optional[int]
+        if s_step is None or s_step == "":
+            step = None
+        else:
+            step = int(s_step)
+        return slice(start, stop, step)
+    else:
+        raise ValueError(s)
 
 
 def get_github_token() -> str:
