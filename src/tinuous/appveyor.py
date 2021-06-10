@@ -7,7 +7,7 @@ from typing import Any, Dict, Iterator, List, Optional
 from dateutil.parser import isoparse
 
 from .base import APIClient, BuildAsset, BuildLog, CISystem, EventType
-from .util import log, removeprefix, sanitize_pathname, stream_to_file
+from .util import log, removeprefix, sanitize_pathname
 
 
 class Appveyor(CISystem):
@@ -151,6 +151,5 @@ class AppveyorJobLog(BuildLog):
             self.job,
             path,
         )
-        r = self.client.get(f"/api/buildjobs/{self.job}/log", stream=True)
-        stream_to_file(r, path)
+        self.client.download(f"/api/buildjobs/{self.job}/log", path)
         return [path]
