@@ -152,6 +152,7 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
             msg += f", {artifacts_added} artifacts added"
         if relassets_added:
             msg += f", {relassets_added} release assets added"
+        msg += f"\n\nProduced by tinuous {__version__}"
         ds.save(recursive=True, message=msg)
 
 
