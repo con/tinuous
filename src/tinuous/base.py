@@ -10,6 +10,7 @@ from typing import Any, Dict, Iterator, List, Optional, Pattern, Tuple, Union
 
 from pydantic import BaseModel, Field, validator
 import requests
+from requests.exceptions import ChunkedEncodingError
 
 from .util import expand_template, log
 
@@ -56,6 +57,8 @@ class EventType(Enum):
 
 
 class APIClient:
+    MAX_RETRIES = 10
+
     def __init__(self, base_url: str, headers: Dict[str, str]):
         self.base_url = base_url
         self.session = requests.Session()
@@ -66,17 +69,44 @@ class APIClient:
             url = path
         else:
             url = self.base_url.rstrip("/") + "/" + path.lstrip("/")
-        i = 1
+        i = 0
         r = self.session.get(url, **kwargs)
-        while r.status_code >= 500 and i <= 10:
-            log.debug(
+        while r.status_code >= 500 and i < self.MAX_RETRIES:
+            log.warning(
                 "Request to %s returned %d; waiting & retrying", url, r.status_code
             )
-            sleep(i)
             i += 1
+            sleep(i)
             r = self.session.get(url, **kwargs)
         r.raise_for_status()
         return r
+
+    def download(self, path: str, filepath: Path) -> None:
+        i = 0
+        while True:
+            r = self.get(path, stream=True)
+            try:
+                try:
+                    with filepath.open("wb") as fp:
+                        for chunk in r.iter_content(chunk_size=8192):
+                            fp.write(chunk)
+                except ChunkedEncodingError as e:
+                    if i < self.MAX_RETRIES:
+                        log.warning(
+                            "Download from %s interrupted: %s; waiting & retrying",
+                            r.request.url,
+                            str(e),
+                        )
+                        i += 1
+                        sleep(i)
+                    else:
+                        log.error("Max retries exceeded")
+                        raise
+                else:
+                    break
+            except BaseException:
+                filepath.unlink(missing_ok=True)
+                raise
 
 
 class CISystem(ABC, BaseModel):

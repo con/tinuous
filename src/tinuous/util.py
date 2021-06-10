@@ -8,8 +8,6 @@ from string import Formatter
 import subprocess
 from typing import Any, Dict, Iterator, Mapping, Optional, Sequence, Union
 
-import requests
-
 
 log = logging.getLogger("tinuous")
 
@@ -24,16 +22,6 @@ def ensure_aware(dt: datetime) -> datetime:
 def removeprefix(s: str, prefix: str) -> str:
     n = len(prefix)
     return s[n:] if s[:n] == prefix else s
-
-
-def stream_to_file(r: requests.Response, p: Path) -> None:
-    try:
-        with p.open("wb") as fp:
-            for chunk in r.iter_content(chunk_size=8192):
-                fp.write(chunk)
-    except BaseException:
-        p.unlink(missing_ok=True)
-        raise
 
 
 def iterfiles(dirpath: Path) -> Iterator[Path]:

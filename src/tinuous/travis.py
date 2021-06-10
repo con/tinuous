@@ -11,7 +11,7 @@ from github.GithubException import UnknownObjectException
 from github.Repository import Repository
 
 from .base import APIClient, BuildAsset, BuildLog, CISystem, EventType
-from .util import get_github_token, log, removeprefix, stream_to_file
+from .util import get_github_token, log, removeprefix
 
 
 class Travis(CISystem):
@@ -199,6 +199,5 @@ class TravisJobLog(BuildLog):
             self.job,
             path,
         )
-        r = self.client.get(f"/job/{self.job_id}/log.txt", stream=True)
-        stream_to_file(r, path)
+        self.client.download(f"/job/{self.job_id}/log.txt", path)
         return [path]

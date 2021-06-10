@@ -32,7 +32,6 @@ from .util import (
     log,
     removeprefix,
     sanitize_pathname,
-    stream_to_file,
 )
 
 
@@ -331,18 +330,16 @@ class GHAArtifact(GHAAsset, Artifact):
             self.number,
             path,
         )
-        r = self.client.get(self.download_url, stream=True)
         fd, fpath = tempfile.mkstemp()
         os.close(fd)
         zippath = Path(fpath)
+        self.client.download(self.download_url, zippath)
         try:
-            stream_to_file(r, zippath)
-            try:
-                with ZipFile(zippath) as zf:
-                    zf.extractall(target_dir)
-            except BaseException:
-                rmtree(target_dir)
-                raise
+            with ZipFile(zippath) as zf:
+                zf.extractall(target_dir)
+        except BaseException:
+            rmtree(target_dir)
+            raise
         finally:
             zippath.unlink(missing_ok=True)
         return list(iterfiles(target_dir))
@@ -396,6 +393,5 @@ class GHReleaseAsset(BaseModel):
             self.tag_name,
             target,
         )
-        r = self.client.get(self.download_url, stream=True)
-        stream_to_file(r, target)
+        self.client.download(self.download_url, target)
         return [target]
