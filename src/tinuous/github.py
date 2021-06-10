@@ -261,10 +261,12 @@ class GHABuildLog(GHAAsset, BuildLog):
         try:
             r = self.client.get(self.logs_url)
         except requests.HTTPError as e:
-            if e.response.status_code == 404:
-                # This can happen when a workflow failed to run due to, say, a
-                # syntax error.
-                log.error("Request for logs returned 404; skipping")
+            if e.response.status_code in (404, 410):
+                # 404 can happen when a workflow failed to run due to, say, a
+                # syntax error.  410 happens when the logs have expired.
+                log.error(
+                    "Request for logs returned %d; skipping", e.response.status_code
+                )
                 return []
             else:
                 raise
