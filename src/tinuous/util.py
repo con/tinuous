@@ -81,9 +81,13 @@ class LazySlicingFormatter(Formatter):
     ) -> Any:
         m = re.match(r"\w+", field_name)
         assert m, f"format field name {field_name!r} does not start with arg_name"
-        key: Union[int, str] = m.group()
-        if key.isdigit():
-            key = int(key)
+        s_key = m.group()
+        assert isinstance(s_key, str)
+        key: Union[int, str]
+        if s_key.isdigit():
+            key = int(s_key)
+        else:
+            key = s_key
         obj = self.get_value(key, args, kwargs)
         s = field_name[m.end() :]
         while s:
