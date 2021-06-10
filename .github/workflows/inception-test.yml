@@ -7,6 +7,12 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        extra:
+          - base
+          - datalad
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
@@ -24,11 +30,29 @@ jobs:
           python -m pip install coverage
           python -m pip install .
 
+      - name: Install datalad and git-annex
+        if: matrix.extra == 'datalad'
+        run: |
+          apt-get update && apt-get install -y git-annex
+          python -m pip install datalad
+
       - name: Checkout con/tinuous-inception
         uses: actions/checkout@v2
         with:
           repository: con/tinuous-inception
           path: tinuous-inception
+
+      - name: Configure datalad
+        if: matrix.extra == 'datalad'
+        run: |
+          git config --global user.email "tinuous@nil"
+          git config --global user.name "Tinuous Tester"
+
+          sed -i -e 's:{year}/{month}/{day}:{year}//{month}//{day}:' config.yml
+          echo "datalad:" >> config.yml
+          echo "  enabled: true" >> config.yml
+          echo "  cfg_proc: text2git" >> config.yml
+        working-directory: tinuous-inception
 
       - name: Run tinuous on tinuous
         run: coverage run --source tinuous --branch -m tinuous fetch
