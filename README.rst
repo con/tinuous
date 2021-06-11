@@ -120,8 +120,7 @@ keys:
     A mapping defining custom path template placeholders.  Each key is the name
     of a custom placeholder, without enclosing braces, and the value is the
     string to substitute in its place.  Custom values may contain standard path
-    template placeholders as well as other custom placeholders defined earlier
-    in the mapping.
+    template placeholders as well as other custom placeholders.
 
 ``ci``
     *(required)* A mapping from the names of the CI systems from which to
