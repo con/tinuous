@@ -108,7 +108,7 @@ class GitHubActions(CISystem):
                         log.info("Event type is %r; skipping", run.event)
 
     def get_event_id(self, run: WorkflowRun, event_type: EventType) -> str:
-        if event_type is EventType.CRON:
+        if event_type in (EventType.CRON, EventType.MANUAL):
             return ensure_aware(run.created_at).strftime("%Y%m%dT%H%M%S")
         elif event_type is EventType.PUSH:
             return run.head_branch

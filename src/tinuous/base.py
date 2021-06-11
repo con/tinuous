@@ -38,6 +38,7 @@ class EventType(Enum):
     CRON = "cron"
     PUSH = "push"
     PULL_REQUEST = "pr"
+    MANUAL = "manual"
 
     @classmethod
     def from_gh_event(cls, gh_event: str) -> Optional["EventType"]:
@@ -45,6 +46,8 @@ class EventType(Enum):
             "schedule": cls.CRON,
             "push": cls.PUSH,
             "pull_request": cls.PULL_REQUEST,
+            "workflow_dispatch": cls.MANUAL,
+            "repository_dispatch": cls.MANUAL,
         }.get(gh_event)
 
     @classmethod
@@ -53,6 +56,7 @@ class EventType(Enum):
             "cron": cls.CRON,
             "push": cls.PUSH,
             "pull_request": cls.PULL_REQUEST,
+            "api": cls.MANUAL,
         }.get(travis_event)
 
 

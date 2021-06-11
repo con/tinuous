@@ -113,7 +113,7 @@ class Travis(CISystem):
                     log.info("Event type is %r; skipping", build["event_type"])
 
     def get_commit(self, build: Dict[str, Any], event_type: EventType) -> Optional[str]:
-        if event_type in (EventType.CRON, EventType.PUSH):
+        if event_type in (EventType.CRON, EventType.MANUAL, EventType.PUSH):
             commit = build["commit"]["sha"]
             assert isinstance(commit, str)
             return commit
@@ -150,7 +150,7 @@ class TravisJobLog(BuildLog):
     ) -> "TravisJobLog":
         created_at = isoparse(build["started_at"])
         event_id: str
-        if event_type is EventType.CRON:
+        if event_type in (EventType.CRON, EventType.MANUAL):
             event_id = created_at.strftime("%Y%m%dT%H%M%S")
         elif event_type is EventType.PUSH:
             event_id = build["branch"]["name"]
