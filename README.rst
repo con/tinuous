@@ -231,7 +231,10 @@ keys:
     points.  Once the assets for all builds for the given CI system &
     configuration have been fetched up to a certain point, the timestamp for
     the latest such build is stored in the state file and used as the new
-    ``since`` value for the respective CI system on subsequent runs.
+    ``since`` value for the respective CI system on subsequent runs.  If the
+    ``since`` setting in the configuration file is then updated to a newer
+    timestamp, the configuration will override the value in the state file, and
+    the next ``tinuous`` run will only retrieve assets after the new setting.
 
 ``until``
     A timestamp (date, time, & timezone); only assets for builds started before

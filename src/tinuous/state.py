@@ -55,7 +55,7 @@ class StateFile(BaseModel):
     def get_since(self, ciname: str) -> datetime:
         if (t := getattr(self.state, ciname)) is not None:
             assert isinstance(t, datetime)
-            return t
+            return max(t, self.default_since)
         else:
             return self.default_since
 
