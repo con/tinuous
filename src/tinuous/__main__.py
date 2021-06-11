@@ -1,5 +1,3 @@
-from datetime import datetime
-import json
 import logging
 import os
 from pathlib import Path
@@ -15,6 +13,7 @@ from . import __version__
 from .base import Artifact, BuildLog
 from .config import Config, GitHubConfig
 from .github import GitHubActions
+from .state import STATE_FILE, StateFile
 from .util import log
 
 
@@ -69,22 +68,16 @@ def main(ctx: click.Context, config: str, log_level: int, env: Optional[str]) ->
 @click.option(
     "-S",
     "--state",
+    "state_path",
     type=click.Path(dir_okay=False, writable=True),
-    default=".dlstate.json",
-    help="Store program state in the given file",
-    show_default=True,
+    help=f"Store program state in the given file  [default: {STATE_FILE}]",
 )
 @click.pass_obj
-def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
+def fetch(cfg: Config, state_path: Optional[str], sanitize_secrets: bool) -> None:
     """ Download logs """
     if sanitize_secrets and not cfg.secrets:
         log.warning("--sanitize-secrets set but no secrets given in configuration")
-    since_stamps: Dict[str, str]
-    try:
-        with open(state) as fp:
-            since_stamps = json.load(fp)
-    except FileNotFoundError:
-        since_stamps = {}
+    statefile = StateFile.from_file(cfg.since, state_path)
     # Fetch tokens early in order to catch failures early:
     tokens: Dict[str, Dict[str, str]] = {}
     for name, cicfg in cfg.ci.items():
@@ -103,10 +96,7 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
     for name, cicfg in cfg.ci.items():
         get_artifacts = getattr(cicfg, "artifacts_path", None) is not None
         log.info("Fetching resources from %s", name)
-        try:
-            since = datetime.fromisoformat(since_stamps[name])
-        except KeyError:
-            since = cfg.since
+        since = statefile.get_since(name)
         ci = cicfg.get_system(
             repo=cfg.repo, since=since, until=cfg.until, tokens=tokens[name]
         )
@@ -139,10 +129,7 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
                     ensure_datalad(ds, path, cfg.datalad.cfg_proc)
                 paths = asset.download(Path(path))
                 relassets_added += len(paths)
-        since_stamps[name] = ci.new_since().isoformat()
-        log.debug("%s timestamp floor updated to %s", name, since_stamps[name])
-    with open(state, "w") as fp:
-        json.dump(since_stamps, fp)
+        statefile.set_since(name, ci.new_since())
     log.info("%d logs downloaded", logs_added)
     log.info("%d artifacts downloaded", artifacts_added)
     log.info("%d release assets downloaded", relassets_added)

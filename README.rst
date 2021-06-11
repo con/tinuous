@@ -94,7 +94,7 @@ Options
 -S FILE, --state FILE           Store program state (e.g., timestamps before
                                 which all asset are known to have been fetched)
                                 in the given file [default value:
-                                ``.dlstate.json``]
+                                ``.tinuous.json``]
 
 ``sanitize`` Command
 --------------------
