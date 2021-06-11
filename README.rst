@@ -34,7 +34,7 @@ Installation
 
     python3 -m pip install tinuous
 
-``tinuous`` can also optionally integrate with Datalad_.  To install Datalad
+``tinuous`` can also optionally integrate with DataLad_.  To install DataLad
 alongside ``tinuous``, specify the ``datalad`` extra::
 
     python3 -m pip install "tinuous[datalad]"
@@ -63,7 +63,7 @@ Global Options
                                 **Warning**: Care must be taken when this file
                                 is located in a Git repository so as not to
                                 publicly expose it: either list the file in
-                                ``.gitignore`` or, if using Datalad or
+                                ``.gitignore`` or, if using DataLad or
                                 git-annex, configure git-annex to prohibit
                                 public sharing of the file.
 
@@ -267,12 +267,12 @@ keys:
     text, and so lookahead and lookbehind will not work in this regex.
 
 ``datalad``
-    A sub-mapping describing integration of ``tinuous`` with Datalad_.
+    A sub-mapping describing integration of ``tinuous`` with DataLad_.
     Subfields:
 
     ``enabled``
-        A boolean.  If true (default false), Datalad must be installed, the
-        current directory will be converted into a Datalad dataset if it is not
+        A boolean.  If true (default false), DataLad must be installed, the
+        current directory will be converted into a DataLad dataset if it is not
         one already, the assets will optionally be divided up into subdatasets,
         and all new assets will be committed at the end of a run of ``tinuous
         fetch``.  ``path`` template strings may contain ``//`` separators
@@ -281,7 +281,7 @@ keys:
     ``cfg_proc``
         Procedure to run on the dataset & subdatasets when creating them
 
-    .. _Datalad: https://www.datalad.org
+    .. _DataLad: https://www.datalad.org
 
 A sample config file:
 
