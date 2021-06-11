@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from .util import log
 
-STATE_FILE = ".tinuous.json"
+STATE_FILE = ".tinuous.state.json"
 OLD_STATE_FILE = ".dlstate.json"
 
 
