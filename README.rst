@@ -222,8 +222,9 @@ keys:
     the given point in time will be retrieved
 
 ``types``
-    *(required)* A list of build trigger event types; only assets for builds
-    triggered by one of the given events will be retrieved
+    A list of build trigger event types; only assets for builds triggered by
+    one of the given events will be retrieved.  If this is not specified,
+    assets will be retrieved for all recognized event types.
 
     The recognized event types are:
 
