@@ -368,7 +368,7 @@ class GHReleaseAsset(BaseModel):
             "second": utc_date.strftime("%S"),
             "ci": "github",
             "type": "release",
-            "type_id": self.tag_name,
+            "release_tag": self.tag_name,
             "build_commit": self.commit,
             "commit": self.commit,
         }
