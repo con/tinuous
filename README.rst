@@ -134,8 +134,9 @@ keys:
         Configuration for retrieving assets from GitHub Actions.  Subfields:
 
         ``paths``
-            *(required)* A mapping giving `template strings <Path Templates_>`_
-            for the paths at which to save various types of assets.  Subfields:
+            A mapping giving `template strings <Path Templates_>`_ for the
+            paths at which to save various types of assets.  If this is empty
+            or not present, no assets are retrieved.  Subfields:
 
             ``logs``
                 A template string that will be instantiated for each workflow
@@ -190,8 +191,9 @@ keys:
         Configuration for retrieving logs from Travis-CI.com.  Subfield:
 
         ``paths``
-            *(required)* A mapping giving `template strings <Path Templates_>`_
-            for the paths at which to save various types of assets.  Subfield:
+            A mapping giving `template strings <Path Templates_>`_ for the
+            paths at which to save various types of assets.  If this is empty
+            or not present, no assets are retrieved.  Subfield:
 
             ``logs``
                 A template string that will be instantiated for each job of
@@ -203,8 +205,9 @@ keys:
         Configuration for retrieving logs from Appveyor.  Subfields:
 
         ``paths``
-            *(required)* A mapping giving `template strings <Path Templates_>`_
-            for the paths at which to save various types of assets.  Subfield:
+            A mapping giving `template strings <Path Templates_>`_ for the
+            paths at which to save various types of assets.  If this is empty
+            or not present, no assets are retrieved.  Subfield:
 
             ``logs``
                 A template string that will be instantiated for each job of

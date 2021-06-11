@@ -34,7 +34,7 @@ class GHPathsDict(PathsDict):
 
 
 class CIConfig(NoExtraModel, ABC):
-    paths: PathsDict
+    paths: PathsDict = Field(default_factory=PathsDict)
 
     @staticmethod
     @abstractmethod
@@ -59,7 +59,7 @@ class CIConfig(NoExtraModel, ABC):
 
 
 class GitHubConfig(CIConfig):
-    paths: GHPathsDict
+    paths: GHPathsDict = Field(default_factory=GHPathsDict)
     workflows: WorkflowSpec = Field(default_factory=WorkflowSpec)
 
     @validator("workflows", pre=True)
