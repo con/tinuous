@@ -28,7 +28,7 @@ from .util import log
     "-c",
     "--config",
     type=click.Path(exists=True, dir_okay=False),
-    default="config.yml",
+    default="tinuous.yaml",
     help="Read configuration from the given file",
     show_default=True,
 )
