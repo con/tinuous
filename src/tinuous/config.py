@@ -134,7 +134,7 @@ class Config(NoExtraModel):
     ci: CIConfigDict
     since: datetime
     until: Optional[datetime] = None
-    types: List[EventType]
+    types: List[EventType] = Field(default_factory=lambda: list(EventType))
     secrets: Dict[str, Pattern] = Field(default_factory=dict)
     allow_secrets_regex: Optional[Pattern] = Field(None, alias="allow-secrets-regex")
     datalad: DataladConfig = Field(default_factory=DataladConfig)
