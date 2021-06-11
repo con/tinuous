@@ -52,8 +52,11 @@ class Appveyor(CISystem):
                 break
 
     def get_build_assets(
-        self, event_types: List[EventType], artifacts: bool = False  # noqa: U100
+        self, event_types: List[EventType], logs: bool, artifacts: bool  # noqa: U100
     ) -> Iterator["BuildAsset"]:
+        if not logs:
+            log.debug("No assets requested for Appveyor builds")
+            return
         log.info("Fetching builds newer than %s", self.since)
         if self.until is not None:
             log.info("Skipping builds newer than %s", self.until)

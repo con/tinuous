@@ -127,7 +127,7 @@ class CISystem(ABC, BaseModel):
 
     @abstractmethod
     def get_build_assets(
-        self, event_types: List[EventType], artifacts: bool = False
+        self, event_types: List[EventType], logs: bool, artifacts: bool
     ) -> Iterator["BuildAsset"]:
         ...  # pragma: no cover
 

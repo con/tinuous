@@ -125,32 +125,39 @@ keys:
 ``ci``
     *(required)* A mapping from the names of the CI systems from which to
     retrieve assets to sub-mappings containing CI-specific configuration.
-    Including a given CI system is optional; assets will be fetched from a
-    given system if & only if it is listed in this mapping.
+    Including a given CI system is optional; assets will only be fetched from a
+    given system if it is listed in this mapping.
 
     The CI systems and their sub-mappings are as follows:
 
     ``github``
         Configuration for retrieving assets from GitHub Actions.  Subfields:
 
-        ``path``
-            *(required)* A template string that will be instantiated for each
-            workflow run to produce the path for the directory (relative to the
-            current working directory) under which the run's build logs will be
-            saved.  See "`Path Templates`_" for more information.
+        ``paths``
+            A mapping giving `template strings <Path Templates_>`_ for the
+            paths at which to save various types of assets.  If this is empty
+            or not present, no assets are retrieved.  Subfields:
 
-        ``artifacts_path``
-            A template string that will be instantiated for each workflow run
-            to produce the path for the directory (relative to the current
-            working directory) under which the run's artifacts will be saved.
-            If this is not specified, no artifacts will be downloaded.
+            ``logs``
+                A template string that will be instantiated for each workflow
+                run to produce the path for the directory (relative to the
+                current working directory) under which the run's build logs
+                will be saved.  If this is not specified, no logs will be
+                downloaded.
 
-        ``releases_path``
-            A template string that will be instantiated for each
-            (non-draft, non-prerelease) GitHub release to produce the path for
-            the directory (relative to the current working directory) under
-            which the release's assets will be saved.  If this is not
-            specified, no release assets will be downloaded.
+            ``artifacts``
+                A template string that will be instantiated for each workflow
+                run to produce the path for the directory (relative to the
+                current working directory) under which the run's artifacts will
+                be saved.  If this is not specified, no artifacts will be
+                downloaded.
+
+            ``releases``
+                A template string that will be instantiated for each
+                (non-draft, non-prerelease) GitHub release to produce the path
+                for the directory (relative to the current working directory)
+                under which the release's assets will be saved.  If this is not
+                specified, no release assets will be downloaded.
 
         ``workflows``
             A specification of the workflows for which to retrieve assets.
@@ -183,20 +190,30 @@ keys:
     ``travis``
         Configuration for retrieving logs from Travis-CI.com.  Subfield:
 
-        ``path``
-            *(required)* A template string that will be instantiated for each
-            job of each build to produce the path for the file (relative to the
-            current working directory) in which the job's logs will be saved.
-            See "`Path Templates`_" for more information.
+        ``paths``
+            A mapping giving `template strings <Path Templates_>`_ for the
+            paths at which to save various types of assets.  If this is empty
+            or not present, no assets are retrieved.  Subfield:
+
+            ``logs``
+                A template string that will be instantiated for each job of
+                each build to produce the path for the file (relative to the
+                current working directory) in which the job's logs will be
+                saved.  If this is not specified, no logs will be downloaded.
 
     ``appveyor``
         Configuration for retrieving logs from Appveyor.  Subfields:
 
-        ``path``
-            *(required)* A template string that will be instantiated for each
-            job of each build to produce the path for the file (relative to the
-            current working directory) in which the job's logs will be saved.
-            See "`Path Templates`_" for more information.
+        ``paths``
+            A mapping giving `template strings <Path Templates_>`_ for the
+            paths at which to save various types of assets.  If this is empty
+            or not present, no assets are retrieved.  Subfield:
+
+            ``logs``
+                A template string that will be instantiated for each job of
+                each build to produce the path for the file (relative to the
+                current working directory) in which the job's logs will be
+                saved.  If this is not specified, no logs will be downloaded.
 
         ``accountName``
             *(required)* The name of the Appveyor account to which the
@@ -276,17 +293,20 @@ A sample config file:
       build_prefix: '{path_prefix}/{type_id}/{build_commit[:7]}'
     ci:
       github:
-        path: '{build_prefix}/{wf_name}/{number}/logs/'
-        artifacts_path: '{build_prefix}/{wf_name}/{number}/artifacts/'
-        releases_path: '{path_prefix}/{type}/{release_tag}/'
+        paths:
+          logs: '{build_prefix}/{wf_name}/{number}/logs/'
+          artifacts: '{build_prefix}/{wf_name}/{number}/artifacts/'
+          releases: '{path_prefix}/{type}/{release_tag}/'
         workflows:
           - test_crippled.yml
           - test_extensions.yml
           - test_macos.yml
       travis:
-        path: '{build_prefix}/{number}/{job}.txt'
+        paths:
+          logs: '{build_prefix}/{number}/{job}.txt'
       appveyor:
-        path: '{build_prefix}/{number}/{job}.txt'
+        paths:
+          logs: '{build_prefix}/{number}/{job}.txt'
         accountName: mih
         projectSlug: datalad
     since: 2021-01-20T00:00:00Z
