@@ -2,35 +2,35 @@ import re
 from typing import Any, Dict
 import pytest
 from tinuous.base import WorkflowSpec
-from tinuous.config import GitHubConfig
+from tinuous.config import GHPathsDict, GitHubConfig
 
 
 @pytest.mark.parametrize(
     "data,cfg",
     [
         (
-            {"path": "folder/subfolder/"},
+            {"paths": {"logs": "folder/subfolder/"}},
             GitHubConfig(
-                path="folder/subfolder/",
+                paths=GHPathsDict(logs="folder/subfolder/"),
                 workflows=WorkflowSpec(
                     regex=False, include=[re.compile(r".*")], exclude=[]
                 ),
             ),
         ),
         (
-            {"path": "folder/subfolder/", "workflows": []},
+            {"paths": {"logs": "folder/subfolder/"}, "workflows": []},
             GitHubConfig(
-                path="folder/subfolder/",
+                paths=GHPathsDict(logs="folder/subfolder/"),
                 workflows=WorkflowSpec(regex=False, include=[], exclude=[]),
             ),
         ),
         (
             {
-                "path": "folder/subfolder/",
+                "paths": {"logs": "folder/subfolder/"},
                 "workflows": ["build-macos.yaml"],
             },
             GitHubConfig(
-                path="folder/subfolder/",
+                paths=GHPathsDict(logs="folder/subfolder/"),
                 workflows=WorkflowSpec(
                     regex=False,
                     include=[re.compile(r"\Abuild\-macos\.yaml\Z")],
@@ -40,11 +40,11 @@ from tinuous.config import GitHubConfig
         ),
         (
             {
-                "path": "folder/subfolder/",
+                "paths": {"logs": "folder/subfolder/"},
                 "workflows": ["build-macos.yaml", "build-windows.yaml"],
             },
             GitHubConfig(
-                path="folder/subfolder/",
+                paths=GHPathsDict(logs="folder/subfolder/"),
                 workflows=WorkflowSpec(
                     regex=False,
                     include=[
@@ -57,11 +57,11 @@ from tinuous.config import GitHubConfig
         ),
         (
             {
-                "path": "folder/subfolder/",
+                "paths": {"logs": "folder/subfolder/"},
                 "workflows": {"include": ["build-macos.yaml", "build-windows.yaml"]},
             },
             GitHubConfig(
-                path="folder/subfolder/",
+                paths=GHPathsDict(logs="folder/subfolder/"),
                 workflows=WorkflowSpec(
                     regex=False,
                     include=[
@@ -74,14 +74,14 @@ from tinuous.config import GitHubConfig
         ),
         (
             {
-                "path": "folder/subfolder/",
+                "paths": {"logs": "folder/subfolder/"},
                 "workflows": {
                     "include": ["build-macos.yaml", "build-windows.yaml"],
                     "exclude": ["*.yml"],
                 },
             },
             GitHubConfig(
-                path="folder/subfolder/",
+                paths=GHPathsDict(logs="folder/subfolder/"),
                 workflows=WorkflowSpec(
                     regex=False,
                     include=[
@@ -94,7 +94,7 @@ from tinuous.config import GitHubConfig
         ),
         (
             {
-                "path": "folder/subfolder/",
+                "paths": {"logs": "folder/subfolder/"},
                 "workflows": {
                     "include": ["build-macos.yaml", "build-windows.yaml"],
                     "exclude": [r".*\.yml"],
@@ -102,7 +102,7 @@ from tinuous.config import GitHubConfig
                 },
             },
             GitHubConfig(
-                path="folder/subfolder/",
+                paths=GHPathsDict(logs="folder/subfolder/"),
                 workflows=WorkflowSpec(
                     regex=True,
                     include=[
@@ -115,7 +115,7 @@ from tinuous.config import GitHubConfig
         ),
         (
             {
-                "path": "folder/subfolder/",
+                "paths": {"logs": "folder/subfolder/"},
                 "workflows": {
                     "include": [r".*\.yaml"],
                     "exclude": [r"^build-macos\.yaml$"],
@@ -123,7 +123,7 @@ from tinuous.config import GitHubConfig
                 },
             },
             GitHubConfig(
-                path="folder/subfolder/",
+                paths=GHPathsDict(logs="folder/subfolder/"),
                 workflows=WorkflowSpec(
                     regex=True,
                     include=[re.compile(r".*\.yaml")],

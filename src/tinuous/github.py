@@ -68,8 +68,11 @@ class GitHubActions(CISystem):
                 yield wf
 
     def get_build_assets(
-        self, event_types: List[EventType], artifacts: bool = False
+        self, event_types: List[EventType], logs: bool, artifacts: bool
     ) -> Iterator["BuildAsset"]:
+        if not logs and not artifacts:
+            log.debug("No assets requested for GitHub Actions runs")
+            return
         log.info("Fetching runs newer than %s", self.since)
         if self.until is not None:
             log.info("Skipping runs newer than %s", self.until)
@@ -90,9 +93,10 @@ class GitHubActions(CISystem):
                     self.register_build(ts, True)
                     if run_event in event_types:
                         event_id = self.get_event_id(run, run_event)
-                        yield GHABuildLog.from_workflow_run(
-                            self.extra_client, wf, run, run_event, event_id
-                        )
+                        if logs:
+                            yield GHABuildLog.from_workflow_run(
+                                self.extra_client, wf, run, run_event, event_id
+                            )
                         if artifacts:
                             for name, download_url in self.get_artifacts(run):
                                 yield GHAArtifact.from_workflow_run(

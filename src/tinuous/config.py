@@ -12,8 +12,29 @@ from .github import GitHubActions
 from .travis import Travis
 
 
+class PathsDict(NoExtraModel):
+    logs: Optional[str] = None
+
+    def gets_builds(self) -> bool:
+        return self.logs is not None
+
+    def gets_releases(self) -> bool:
+        return False
+
+
+class GHPathsDict(PathsDict):
+    artifacts: Optional[str] = None
+    releases: Optional[str] = None
+
+    def gets_builds(self) -> bool:
+        return self.logs is not None or self.artifacts is not None
+
+    def gets_releases(self) -> bool:
+        return self.releases is not None
+
+
 class CIConfig(NoExtraModel, ABC):
-    path: str
+    paths: PathsDict
 
     @staticmethod
     @abstractmethod
@@ -30,10 +51,15 @@ class CIConfig(NoExtraModel, ABC):
     ) -> CISystem:
         ...  # pragma: no cover
 
+    def gets_builds(self) -> bool:
+        return self.paths.gets_builds()
+
+    def gets_releases(self) -> bool:
+        return self.paths.gets_releases()
+
 
 class GitHubConfig(CIConfig):
-    artifacts_path: Optional[str] = None
-    releases_path: Optional[str] = None
+    paths: GHPathsDict
     workflows: WorkflowSpec = Field(default_factory=WorkflowSpec)
 
     @validator("workflows", pre=True)

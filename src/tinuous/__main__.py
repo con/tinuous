@@ -13,7 +13,7 @@ from yaml import safe_load
 
 from . import __version__
 from .base import Artifact, BuildLog
-from .config import Config, GitHubConfig
+from .config import Config, GHPathsDict
 from .github import GitHubActions
 from .util import log
 
@@ -101,7 +101,9 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
     artifacts_added = 0
     relassets_added = 0
     for name, cicfg in cfg.ci.items():
-        get_artifacts = getattr(cicfg, "artifacts_path", None) is not None
+        if not cicfg.gets_builds() and not cicfg.gets_releases():
+            log.info("No paths configured for %s; skipping", name)
+            continue
         log.info("Fetching resources from %s", name)
         try:
             since = datetime.fromisoformat(since_stamps[name])
@@ -110,31 +112,38 @@ def fetch(cfg: Config, state: str, sanitize_secrets: bool) -> None:
         ci = cicfg.get_system(
             repo=cfg.repo, since=since, until=cfg.until, tokens=tokens[name]
         )
-        for obj in ci.get_build_assets(cfg.types, artifacts=get_artifacts):
-            if isinstance(obj, BuildLog):
-                path = obj.expand_path(cicfg.path, cfg.vars)
-            elif isinstance(obj, Artifact):
-                assert get_artifacts
-                path = obj.expand_path(
-                    cicfg.artifacts_path,  # type: ignore[attr-defined]
-                    cfg.vars,
-                )
-            else:
-                raise AssertionError(f"Unexpected asset type {type(obj).__name__}")
-            if cfg.datalad.enabled:
-                ensure_datalad(ds, path, cfg.datalad.cfg_proc)
-            paths = obj.download(Path(path))
-            if isinstance(obj, BuildLog):
-                logs_added += len(paths)
-                if sanitize_secrets and cfg.secrets:
-                    for p in paths:
-                        sanitize(p, cfg.secrets, cfg.allow_secrets_regex)
-            elif isinstance(obj, Artifact):
-                artifacts_added += len(paths)
-        if isinstance(cicfg, GitHubConfig) and cicfg.releases_path is not None:
+        artifacts_path = getattr(cicfg.paths, "artifacts", None)
+        if cicfg.gets_builds():
+            for obj in ci.get_build_assets(
+                cfg.types,
+                logs=cicfg.paths.logs is not None,
+                artifacts=artifacts_path is not None,
+            ):
+                if isinstance(obj, BuildLog):
+                    assert cicfg.paths.logs is not None
+                    path = obj.expand_path(cicfg.paths.logs, cfg.vars)
+                elif isinstance(obj, Artifact):
+                    assert artifacts_path is not None
+                    path = obj.expand_path(artifacts_path, cfg.vars)
+                else:
+                    raise AssertionError(f"Unexpected asset type {type(obj).__name__}")
+                if cfg.datalad.enabled:
+                    ensure_datalad(ds, path, cfg.datalad.cfg_proc)
+                paths = obj.download(Path(path))
+                if isinstance(obj, BuildLog):
+                    logs_added += len(paths)
+                    if sanitize_secrets and cfg.secrets:
+                        for p in paths:
+                            sanitize(p, cfg.secrets, cfg.allow_secrets_regex)
+                elif isinstance(obj, Artifact):
+                    artifacts_added += len(paths)
+        if cicfg.gets_releases():
             assert isinstance(ci, GitHubActions)
+            assert isinstance(cicfg.paths, GHPathsDict)
+            releases_path = cicfg.paths.releases
+            assert releases_path is not None
             for asset in ci.get_release_assets():
-                path = asset.expand_path(cicfg.releases_path, cfg.vars)
+                path = asset.expand_path(releases_path, cfg.vars)
                 if cfg.datalad.enabled:
                     ensure_datalad(ds, path, cfg.datalad.cfg_proc)
                 paths = asset.download(Path(path))
