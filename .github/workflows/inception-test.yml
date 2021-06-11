@@ -48,10 +48,10 @@ jobs:
           git config --global user.email "tinuous@nil"
           git config --global user.name "Tinuous Tester"
 
-          sed -i -e 's:{year}/{month}/{day}:{year}//{month}//{day}:' config.yml
-          echo "datalad:" >> config.yml
-          echo "  enabled: true" >> config.yml
-          echo "  cfg_proc: text2git" >> config.yml
+          sed -i -e 's:{year}/{month}/{day}:{year}//{month}//{day}:' tinuous.yaml
+          echo "datalad:" >> tinuous.yaml
+          echo "  enabled: true" >> tinuous.yaml
+          echo "  cfg_proc: text2git" >> tinuous.yaml
         working-directory: tinuous-inception
 
       - name: Run tinuous on tinuous
