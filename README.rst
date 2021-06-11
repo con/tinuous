@@ -52,7 +52,7 @@ Global Options
 --------------
 
 -c FILE, --config FILE          Read configuration from the given file [default
-                                value: ``config.yml``]
+                                value: ``tinuous.yaml``]
 
 -E FILE, --env FILE             Load environment variables from the given
                                 ``.env`` file.  By default, environment
