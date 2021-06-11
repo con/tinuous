@@ -450,3 +450,83 @@ In order to retrieve logs from Appveyor, an Appveyor API key (for either all
 accessible accounts or just the specific account associated with the
 repository) must be specified via the ``APPVEYOR_TOKEN`` environment variable.
 Such a key can be obtained at <https://ci.appveyor.com/api-keys>.
+
+
+Cron Integration
+================
+
+If you want to set up scheduled runs of ``tinuous`` on a Linux server, one way
+is as follows:
+
+1. Create a new directory and ``cd`` into it.
+
+2. Create a file named ``tinuous.yaml`` in this directory `as described above
+   <Configuration_>`_
+
+3. Create a file named ``.env`` in this directory containing any needed
+   authentication tokens.  Entries are of the form ``NAME=value``, e.g.::
+
+        GITHUB_TOKEN=ghp_abcdef0123456789
+        TRAVIS_TOKEN=asdfghjkl
+        APPVEYOR_TOKEN=v2.qwertyuiop
+
+4. Create a Python virtualenv_ to provide an isolated environment to install
+   ``tinuous`` into::
+
+        python3 -m venv venv
+
+5. Install ``tinuous`` inside the virtualenv::
+
+        venv/bin/pip install tinuous
+
+6. Run ``tinuous`` to fetch your first logs and test your configuration::
+
+        venv/bin/tinuous fetch
+
+7. Once you're satisfied with your ``tinuous`` config, set up scheduled runs by
+   creating a cronjob of the form::
+
+        0 0 * * * cd /path/to/directory && chronic flock -n -E 0 .tinuous.lock venv/bin/tinuous fetch
+
+   This job runs once a day at midnight; adjust the cron expression to taste.
+   We use ``chronic`` (from moreutils_) to suppress output unless the command
+   fails, thus preventing e-mails full of log messages for every run.
+   ``flock`` is used to ensure that no more than one instance of ``tinuous`` is
+   running at a time.
+
+8. If you want to commit your logs to a Git repository, first make sure that
+   ``.env``, ``venv/``, and ``.tinuous.lock`` are included in the repository's
+   ``.gitignore``.  Consider setting up the repository with DataLad_; when the
+   DataLad integration is enabled, ``tinuous`` will automatically commit any
+   new logs at the end of a run.
+
+   If you're using a regular Git repository instead, you can commit any new
+   logs at the end of a run by adding the following script to your ``tinuous``
+   directory:
+
+        .. code:: bash
+
+            #!/bin/bash
+            set -ex
+            cd "$(dirname "$0")"
+            venv/bin/tinuous fetch
+            git add --all
+            git commit -m "Ran tinuous"
+            # Uncomment if you want to push the commits to a remote repository:
+            #git push
+
+   and changing your cronjob to::
+
+        0 0 * * * cd /path/to/directory && chronic flock -n -E 0 .tinuous.lock bash name-of-script.sh
+
+9. If you ever need to upgrade ``tinuous``, run the following command inside
+   your ``tinuous`` directory::
+
+        venv/bin/pip install --upgrade tinuous
+
+10. Enjoy your collection of logs!
+
+.. _virtualenv: https://packaging.python.org/guides/installing-using-pip-and
+                -virtual-environments/
+
+.. _moreutils: https://joeyh.name/code/moreutils/
