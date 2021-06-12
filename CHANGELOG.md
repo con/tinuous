@@ -1,3 +1,56 @@
+# 0.3.0 (Sat Jun 12 2021)
+
+#### 🚀 Enhancement
+
+- Allow `since` setting to override state file if newer [#102](https://github.com/con/tinuous/pull/102) ([@jwodder](https://github.com/jwodder))
+- [BREAKING] Rename default config file to `tinuous.yaml` [#101](https://github.com/con/tinuous/pull/101) ([@jwodder](https://github.com/jwodder))
+- Rename state file; update state file after each CI system finishes [#100](https://github.com/con/tinuous/pull/100) ([@jwodder](https://github.com/jwodder))
+- [BREAKING] Redo path specifications [#98](https://github.com/con/tinuous/pull/98) ([@jwodder](https://github.com/jwodder))
+- [BREAKING] Replace `{type_id}` for releases with `{release_tag}` [#97](https://github.com/con/tinuous/pull/97) ([@jwodder](https://github.com/jwodder))
+- Make the "types" setting optional [#96](https://github.com/con/tinuous/pull/96) ([@jwodder](https://github.com/jwodder))
+- Add "manual" event type [#95](https://github.com/con/tinuous/pull/95) ([@jwodder](https://github.com/jwodder))
+- Add "Produced by tinuous" message to Datalad commit messages [#86](https://github.com/con/tinuous/pull/86) ([@jwodder](https://github.com/jwodder))
+- Allow specifying GitHub workflow inclusions & exclusions with regexes [#80](https://github.com/con/tinuous/pull/80) ([@jwodder](https://github.com/jwodder))
+- Add --version option [#81](https://github.com/con/tinuous/pull/81) ([@jwodder](https://github.com/jwodder))
+- Add `{job_index}`, `{job_env}`, and `{job_env_hash}` placeholders [#73](https://github.com/con/tinuous/pull/73) ([@jwodder](https://github.com/jwodder))
+- Add "until:" config setting [#76](https://github.com/con/tinuous/pull/76) ([@jwodder](https://github.com/jwodder))
+- Fill in `{commit}` for Travis PR builds by querying GitHub [#68](https://github.com/con/tinuous/pull/68) ([@jwodder](https://github.com/jwodder))
+- Rename `{commit}` to `{build_commit}`; `{commit}` now refers to triggering commit [#64](https://github.com/con/tinuous/pull/64) ([@jwodder](https://github.com/jwodder))
+- Make datalad an extra dependency [#63](https://github.com/con/tinuous/pull/63) ([@jwodder](https://github.com/jwodder))
+- Support reading env vars from .env files [#59](https://github.com/con/tinuous/pull/59) ([@jwodder](https://github.com/jwodder))
+- Eliminate `{abbrev_commit}` in favor of `{commit[:7]}` slicing [#62](https://github.com/con/tinuous/pull/62) ([@jwodder](https://github.com/jwodder))
+
+#### 🐛 Bug Fix
+
+- Retry downloads interrupted by connnection resets [#91](https://github.com/con/tinuous/pull/91) ([@jwodder](https://github.com/jwodder))
+- Skip GitHub logs that return 410 [#87](https://github.com/con/tinuous/pull/87) ([@jwodder](https://github.com/jwodder))
+- Don't expand unused vars [#79](https://github.com/con/tinuous/pull/79) ([@jwodder](https://github.com/jwodder))
+- Better `{commit}` lookup for Travis builds [#71](https://github.com/con/tinuous/pull/71) ([@jwodder](https://github.com/jwodder))
+- Sleep on & retry requests that return 5xx [#56](https://github.com/con/tinuous/pull/56) ([@jwodder](https://github.com/jwodder))
+- Try fetching PR info from "List pull requests associated with a commit" endpoint [#53](https://github.com/con/tinuous/pull/53) ([@jwodder](https://github.com/jwodder))
+- Cache PRs corresponding to commit hashes [#52](https://github.com/con/tinuous/pull/52) ([@jwodder](https://github.com/jwodder))
+
+#### 🏠 Internal
+
+- Reorganize code [#66](https://github.com/con/tinuous/pull/66) ([@jwodder](https://github.com/jwodder))
+
+#### 📝 Documentation
+
+- DOC: a more kosher casing of DataLad [#105](https://github.com/con/tinuous/pull/105) ([@yarikoptic](https://github.com/yarikoptic))
+- Doc fix: Custom placeholders don't have to be defined in order any more [#99](https://github.com/con/tinuous/pull/99) ([@jwodder](https://github.com/jwodder))
+
+#### 🧪 Tests
+
+- Add test run with Datalad [#89](https://github.com/con/tinuous/pull/89) ([@jwodder](https://github.com/jwodder))
+- Add workflow for running tinuous on tinuous [#65](https://github.com/con/tinuous/pull/65) ([@jwodder](https://github.com/jwodder))
+
+#### Authors: 2
+
+- John T. Wodder II ([@jwodder](https://github.com/jwodder))
+- Yaroslav Halchenko ([@yarikoptic](https://github.com/yarikoptic))
+
+---
+
 # 0.2.0 (Mon May 17 2021)
 
 #### 🚀 Enhancement
