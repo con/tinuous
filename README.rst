@@ -176,22 +176,22 @@ keys:
 
             ``include``
                 A list of workflows to retrieve assets for, given as either
-                basenames or (when ``regex`` is true) regular expressions to
-                match against basenames.  If ``include`` is omitted, it
-                defaults to including all workflows.
+                basenames or (when ``regex`` is true) `Python regular
+                expressions`_ to match against basenames.  If ``include`` is
+                omitted, it defaults to including all workflows.
 
             ``exclude``
                 A list of workflows to not retrieve assets for, given as either
-                basenames or (when ``regex`` is true) regular expressions to
-                match against basenames.  If ``exclude`` is omitted, no
-                workflows are excluded.  Workflows that match both ``include``
-                and ``exclude`` are excluded.
+                basenames or (when ``regex`` is true) `Python regular
+                expressions`_ to match against basenames.  If ``exclude`` is
+                omitted, no workflows are excluded.  Workflows that match both
+                ``include`` and ``exclude`` are excluded.
 
             ``regex``
                 A boolean.  If true (default false), the elements of the
-                ``include`` and ``exclude`` fields are treated as regular
-                expressions that are matched (unanchored) against workflow
-                basenames; if false, they are used as exact names
+                ``include`` and ``exclude`` fields are treated as `Python
+                regular expressions`_ that are matched (unanchored) against
+                workflow basenames; if false, they are used as exact names
 
             When ``workflows`` is not specified, assets are retrieved for all
             workflows in the repository.
@@ -269,8 +269,8 @@ keys:
         A build in response to new commits
 
 ``secrets``
-    A mapping from names (used in log messages) to regexes matching secrets to
-    sanitize
+    A mapping from names (used in log messages) to `Python regular
+    expressions`_ matching secrets to sanitize
 
 ``allow-secrets-regex``
     Any strings that match a ``secrets`` regex and also match this regex will
@@ -294,6 +294,9 @@ keys:
         Procedure to run on the dataset & subdatasets when creating them
 
     .. _DataLad: https://www.datalad.org
+
+.. _Python regular expressions: https://docs.python.org/3/library/re.html
+                                #regular-expression-syntax
 
 A sample config file:
 
