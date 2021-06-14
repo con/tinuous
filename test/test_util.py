@@ -2,7 +2,12 @@ from types import SimpleNamespace
 from typing import Any, Dict
 import pytest
 from pytest_mock import MockerFixture
-from tinuous.util import LazySlicingFormatter, expand_template, parse_slice
+from tinuous.util import (
+    LazySlicingFormatter,
+    expand_template,
+    parse_slice,
+    removeprefix,
+)
 
 
 def test_expand_template() -> None:
@@ -93,3 +98,18 @@ def test_lazy_slicing_formatter_var_reuse(mocker: MockerFixture) -> None:
     spy = mocker.spy(fmter, "format")
     assert fmter.format("-{foo}-{foo}-") == "-bar-bar-"
     assert spy.call_args_list == [mocker.call("-{foo}-{foo}-"), mocker.call("bar")]
+
+
+@pytest.mark.parametrize(
+    "s,prefix,result",
+    [
+        ("foobar", "foo", "bar"),
+        ("foobar", "bar", "foobar"),
+        ("foobar", "", "foobar"),
+        ("foobar", "foobar", ""),
+        ("foobar", "foobarx", "foobar"),
+        ("foobar", "xfoobar", "foobar"),
+    ],
+)
+def test_removeprefix(s: str, prefix: str, result: str) -> None:
+    assert removeprefix(s, prefix) == result
