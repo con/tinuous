@@ -524,7 +524,7 @@ is as follows:
 
         venv/bin/pip install --upgrade tinuous
 
-10. Enjoy your collection of logs!
+10. Enjoy your collection of logs, build artifacts, and/or release assets!
 
 .. _virtualenv: https://packaging.python.org/guides/installing-using-pip-and
                 -virtual-environments/
