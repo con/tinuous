@@ -30,7 +30,6 @@ from .util import (
     get_github_token,
     iterfiles,
     log,
-    removeprefix,
     sanitize_pathname,
 )
 
@@ -64,7 +63,7 @@ class GitHubActions(CISystem):
 
     def get_workflows(self) -> Iterator[Workflow]:
         for wf in self.ghrepo.get_workflows():
-            if self.workflow_spec.match(removeprefix(wf.path, ".github/workflows/")):
+            if self.workflow_spec.match(wf.path):
                 yield wf
 
     def get_build_assets(

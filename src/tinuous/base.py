@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from functools import cached_property
 import heapq
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 from time import sleep
 from typing import Any, Dict, Iterator, List, Optional, Pattern, Tuple, Union
@@ -223,7 +223,8 @@ class WorkflowSpec(NoExtraModel):
             v = r"\A" + re.escape(v) + r"\Z"
         return v
 
-    def match(self, s: str) -> bool:
+    def match(self, wf_path: str) -> bool:
+        s = PurePosixPath(wf_path).name
         return any(r.search(s) for r in self.include) and not any(
             r.search(s) for r in self.exclude
         )
