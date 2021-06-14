@@ -13,12 +13,17 @@
 .. image:: https://img.shields.io/pypi/pyversions/tinuous.svg
     :target: https://pypi.org/project/tinuous/
 
+.. image:: https://img.shields.io/conda/vn/conda-forge/tinuous.svg
+    :target: https://anaconda.org/conda-forge/tinuous
+    :alt: Conda Version
+
 .. image:: https://img.shields.io/github/license/con/tinuous.svg
     :target: https://opensource.org/licenses/MIT
     :alt: MIT License
 
 `GitHub <https://github.com/con/tinuous>`_
 | `PyPI <https://pypi.org/project/tinuous/>`_
+| `Anaconda <https://anaconda.org/conda-forge/tinuous>`_
 | `Issues <https://github.com/con/tinuous/issues>`_
 | `Changelog <https://github.com/con/tinuous/blob/master/CHANGELOG.md>`_
 
@@ -38,6 +43,10 @@ Installation
 alongside ``tinuous``, specify the ``datalad`` extra::
 
     python3 -m pip install "tinuous[datalad]"
+
+``tinuous`` is also available for conda!  To install, run::
+
+    conda install -c conda-forge tinuous
 
 
 Usage
