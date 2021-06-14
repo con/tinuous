@@ -44,7 +44,7 @@ alongside ``tinuous``, specify the ``datalad`` extra::
 
     python3 -m pip install "tinuous[datalad]"
 
-``tinuous`` is also available for Anaconda!  To install, run::
+``tinuous`` is also available for conda!  To install, run::
 
     conda install -c conda-forge tinuous
 
