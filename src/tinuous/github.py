@@ -5,10 +5,12 @@ import os
 from pathlib import Path
 from shutil import rmtree
 import tempfile
+from time import sleep
 from typing import Any, Dict, Iterator, List, Tuple
 from zipfile import ZipFile
 
 from github import Github
+from github.GithubException import RateLimitExceededException
 from github.Repository import Repository
 from github.Workflow import Workflow
 from github.WorkflowRun import WorkflowRun
@@ -132,16 +134,41 @@ class GitHubActions(CISystem):
                     # have to fall back to performing an issue search to fill
                     # those in.  This should hopefully be used sparingly, as
                     # there's a 30 searches per hour rate limit.
-                    try:
-                        pr = str(
-                            self.client.search_issues(
-                                f"repo:{run.repository.full_name} is:pr {run.head_sha}",
-                                sort="created",
-                                order="asc",
-                            )[0].number
-                        )
-                    except IndexError:
-                        pr = "UNK"
+                    while True:
+                        try:
+                            pr = str(
+                                self.client.search_issues(
+                                    f"repo:{run.repository.full_name} is:pr"
+                                    f" {run.head_sha}",
+                                    sort="created",
+                                    order="asc",
+                                )[0].number
+                            )
+                            break
+                        except IndexError:
+                            pr = "UNK"
+                            break
+                        except RateLimitExceededException:
+                            reset_time = ensure_aware(
+                                self.client.get_rate_limit().search.reset
+                            )
+                            # Take `max()` just in case we're right up against
+                            # the reset time, and add 1 because `sleep()` isn't
+                            # always exactly accurate
+                            delay = (
+                                max(
+                                    (
+                                        reset_time - datetime.now().astimezone()
+                                    ).total_seconds(),
+                                    0,
+                                )
+                                + 1
+                            )
+                            log.warning(
+                                "Search rate limit exceeded; sleeping for %s seconds",
+                                delay,
+                            )
+                            sleep(delay)
                 self.hash2pr[run.head_sha] = pr
                 return pr
         else:
