@@ -479,6 +479,11 @@ is as follows:
 
         venv/bin/pip install tinuous
 
+   If you want to use DataLad with ``tinuous``, you need to install it as well,
+   even if it's already installed outside the virtualenv::
+
+        venv/bin/pip install datalad
+
 6. Run ``tinuous`` to fetch your first logs and test your configuration::
 
         venv/bin/tinuous fetch
