@@ -27,7 +27,7 @@ from .util import log
 @click.option(
     "-c",
     "--config",
-    type=click.Path(exists=True, dir_okay=False),
+    type=click.Path(dir_okay=False),
     default="tinuous.yaml",
     help="Read configuration from the given file",
     show_default=True,
@@ -55,8 +55,7 @@ def main(ctx: click.Context, config: str, log_level: int, env: Optional[str]) ->
         datefmt="%Y-%m-%dT%H:%M:%S%z",
         level=log_level,
     )
-    with open(config) as fp:
-        ctx.obj = Config.parse_obj(safe_load(fp))
+    ctx.obj = config
 
 
 @main.command()
@@ -73,8 +72,13 @@ def main(ctx: click.Context, config: str, log_level: int, env: Optional[str]) ->
     help=f"Store program state in the given file  [default: {STATE_FILE}]",
 )
 @click.pass_obj
-def fetch(cfg: Config, state_path: Optional[str], sanitize_secrets: bool) -> None:
+def fetch(config_file: str, state_path: Optional[str], sanitize_secrets: bool) -> None:
     """ Download logs """
+    try:
+        with open(config_file) as fp:
+            cfg = Config.parse_obj(safe_load(fp))
+    except FileNotFoundError:
+        raise click.UsageError(f"Configuration file not found: {config_file}")
     if sanitize_secrets and not cfg.secrets:
         log.warning("--sanitize-secrets set but no secrets given in configuration")
     statefile = StateFile.from_file(cfg.since, state_path)
@@ -157,8 +161,13 @@ def fetch(cfg: Config, state_path: Optional[str], sanitize_secrets: bool) -> Non
     "path", type=click.Path(exists=True, dir_okay=False, writable=True), nargs=-1
 )
 @click.pass_obj
-def sanitize_cmd(cfg: Config, path: List[str]) -> None:
+def sanitize_cmd(config_file: str, path: List[str]) -> None:
     """ Sanitize secrets in logs """
+    try:
+        with open(config_file) as fp:
+            cfg = Config.parse_obj(safe_load(fp))
+    except FileNotFoundError:
+        raise click.UsageError(f"Configuration file not found: {config_file}")
     for p in path:
         sanitize(Path(p), cfg.secrets, cfg.allow_secrets_regex)
 
