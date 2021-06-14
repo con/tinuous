@@ -174,24 +174,24 @@ keys:
             extension (e.g., ``test.yml``, not ``.github/workflows/test.yml``)
             or a mapping containing the following fields:
 
-                ``include``
-                    A list of workflows to retrieve assets for, given as either
-                    basenames or (when ``regex`` is true) regular expressions
-                    to match against basenames.  If ``include`` is omitted, it
-                    defaults to including all workflows.
+            ``include``
+                A list of workflows to retrieve assets for, given as either
+                basenames or (when ``regex`` is true) regular expressions to
+                match against basenames.  If ``include`` is omitted, it
+                defaults to including all workflows.
 
-                ``exclude``
-                    A list of workflows to not retrieve assets for, given as
-                    either basenames or (when ``regex`` is true) regular
-                    expressions to match against basenames.  If ``exclude`` is
-                    omitted, no workflows are excluded.  Workflows that match
-                    both ``include`` and ``exclude`` are excluded.
+            ``exclude``
+                A list of workflows to not retrieve assets for, given as either
+                basenames or (when ``regex`` is true) regular expressions to
+                match against basenames.  If ``exclude`` is omitted, no
+                workflows are excluded.  Workflows that match both ``include``
+                and ``exclude`` are excluded.
 
-                ``regex``
-                    A boolean.  If true (default false), the elements of the
-                    ``include`` and ``exclude`` fields are treated as regular
-                    expressions that are matched (unanchored) against workflow
-                    basenames; if false, they are used as exact names
+            ``regex``
+                A boolean.  If true (default false), the elements of the
+                ``include`` and ``exclude`` fields are treated as regular
+                expressions that are matched (unanchored) against workflow
+                basenames; if false, they are used as exact names
 
             When ``workflows`` is not specified, assets are retrieved for all
             workflows in the repository.
@@ -521,16 +521,16 @@ is as follows:
    logs at the end of a run by adding the following script to your ``tinuous``
    directory:
 
-        .. code:: bash
+   .. code:: bash
 
-            #!/bin/bash
-            set -ex
-            cd "$(dirname "$0")"
-            venv/bin/tinuous fetch
-            git add --all
-            git commit -m "Ran tinuous"
-            # Uncomment if you want to push the commits to a remote repository:
-            #git push
+       #!/bin/bash
+       set -ex
+       cd "$(dirname "$0")"
+       venv/bin/tinuous fetch
+       git add --all
+       git commit -m "Ran tinuous"
+       # Uncomment if you want to push the commits to a remote repository:
+       #git push
 
    and changing your cronjob to::
 
