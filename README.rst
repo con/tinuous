@@ -324,7 +324,7 @@ A sample config file:
     since: 2021-01-20T00:00:00Z
     types: [cron, manual, pr, push]
     secrets:
-      github: '\b(v1\.)?[a-f0-9]{40}\b'
+      github: '\bgh[a-z]_[A-Za-z0-9]{36,}\b'
       docker-hub: '\b[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\b'
       appveyor: '\b(v2\.)?[a-z0-9]{20}\b'
       travis: '\b[a-zA-Z0-9]{22}\b'
