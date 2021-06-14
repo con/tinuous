@@ -9,6 +9,7 @@ from typing import Dict, Iterator, List, Tuple
 from zipfile import ZipFile
 
 from github import Github
+from github.GithubException import RateLimitExceededException
 from github.Repository import Repository
 from github.Workflow import Workflow
 from github.WorkflowRun import WorkflowRun
@@ -38,6 +39,7 @@ from .util import (
 class GitHubActions(CISystem):
     workflow_spec: WorkflowSpec
     hash2pr: Dict[str, str] = Field(default_factory=dict)
+    doing_searches: bool = True
 
     @staticmethod
     def get_auth_tokens() -> Dict[str, str]:
@@ -128,7 +130,7 @@ class GitHubActions(CISystem):
                 )
                 if data := r.json():
                     pr = str(data[0]["number"])
-                else:
+                elif self.doing_searches:
                     # The above endpoint ignores PRs made from forks, so we
                     # have to fall back to performing an issue search to fill
                     # those in.  This should hopefully be used sparingly, as
@@ -143,6 +145,15 @@ class GitHubActions(CISystem):
                         )
                     except IndexError:
                         pr = "UNK"
+                    except RateLimitExceededException:
+                        log.warning(
+                            "Search rate limit exceeded; not performing any"
+                            " more issue searches"
+                        )
+                        pr = "UNK"
+                        self.doing_searches = False
+                else:
+                    pr = "UNK"
                 self.hash2pr[run.head_sha] = pr
                 return pr
         else:
