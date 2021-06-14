@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from shutil import rmtree
 import tempfile
-from typing import Dict, Iterator, List, Tuple
+from typing import Any, Dict, Iterator, List, Tuple
 from zipfile import ZipFile
 
 from github import Github
@@ -203,7 +203,7 @@ class GHAAsset(BuildAsset):
     workflow_file: str
     run_id: int
 
-    def path_fields(self) -> Dict[str, str]:
+    def path_fields(self) -> Dict[str, Any]:
         fields = super().path_fields()
         fields.update(
             {
@@ -361,7 +361,7 @@ class GHReleaseAsset(BaseModel):
         # To allow APIClient:
         arbitrary_types_allowed = True
 
-    def path_fields(self) -> Dict[str, str]:
+    def path_fields(self) -> Dict[str, Any]:
         utc_date = self.published_at.astimezone(timezone.utc)
         return {
             "year": utc_date.strftime("%Y"),

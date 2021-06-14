@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any, Dict
 import pytest
@@ -38,6 +39,17 @@ def test_expand_template_unused_bad() -> None:
             {"bad": "{undefined}", "cleesh": "{description[:6]}"},
         )
         == "A test"
+    )
+
+
+def test_expand_template_datetime_format() -> None:
+    assert (
+        expand_template(
+            "{when:%Y-%b-%d}",
+            {"when": datetime(2021, 6, 14, 14, 44, 25, tzinfo=timezone.utc)},
+            {},
+        )
+        == "2021-Jun-14"
     )
 
 

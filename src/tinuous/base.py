@@ -163,10 +163,12 @@ class BuildAsset(ABC, BaseModel):
         # To allow APIClient:
         arbitrary_types_allowed = True
 
-    def path_fields(self) -> Dict[str, str]:
+    def path_fields(self) -> Dict[str, Any]:
         utc_date = self.created_at.astimezone(timezone.utc)
         commit = "UNK" if self.commit is None else self.commit
         return {
+            "timestamp": utc_date,
+            "timestamp_local": self.created_at.astimezone(),
             "year": utc_date.strftime("%Y"),
             "month": utc_date.strftime("%m"),
             "day": utc_date.strftime("%d"),

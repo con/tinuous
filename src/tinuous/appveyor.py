@@ -125,7 +125,7 @@ class AppveyorJobLog(BuildLog):
             envvars=removeprefix(job["name"], "Environment: "),
         )
 
-    def path_fields(self) -> Dict[str, str]:
+    def path_fields(self) -> Dict[str, Any]:
         fields = super().path_fields()
         fields.update(
             {
