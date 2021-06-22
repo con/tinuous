@@ -25,6 +25,7 @@ COMMON_STATUS_MAP = {
     "neutral": "incomplete",
     "action_required": "incomplete",
     "cancelled": "incomplete",
+    "canceled": "incomplete",
     "skipped": "incomplete",
     "stale": "incomplete",
     # Error on unknown so we're forced to categorize them.
