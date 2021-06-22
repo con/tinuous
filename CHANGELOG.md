@@ -1,3 +1,37 @@
+# 0.4.0 (Tue Jun 22 2021)
+
+#### 🚀 Enhancement
+
+- Add `{timestamp}` and `{timestamp_local}` placeholders [#114](https://github.com/con/tinuous/pull/114) ([@jwodder](https://github.com/jwodder))
+
+#### 🐛 Bug Fix
+
+- Recognize "canceled" status [#120](https://github.com/con/tinuous/pull/120) ([@jwodder](https://github.com/jwodder))
+- Save changes in DataLad if only the statefile was modified [#121](https://github.com/con/tinuous/pull/121) ([@jwodder](https://github.com/jwodder))
+- Sleep when search rate limit reached [#117](https://github.com/con/tinuous/pull/117) ([@jwodder](https://github.com/jwodder))
+- Delay opening of config file to actual command execution [#116](https://github.com/con/tinuous/pull/116) ([@jwodder](https://github.com/jwodder))
+
+#### 📝 Documentation
+
+- Specify that the regexes are Python regexes and link to the Python docs [#110](https://github.com/con/tinuous/pull/110) ([@jwodder](https://github.com/jwodder))
+- Add docstring to `__init__.py` [#109](https://github.com/con/tinuous/pull/109) ([@jwodder](https://github.com/jwodder))
+- Update GitHub token regex in sample config [#108](https://github.com/con/tinuous/pull/108) ([@jwodder](https://github.com/jwodder))
+- Fix README formatting [#115](https://github.com/con/tinuous/pull/115) ([@jwodder](https://github.com/jwodder))
+- Add Anaconda badge and installation command [#107](https://github.com/con/tinuous/pull/107) ([@jwodder](https://github.com/jwodder))
+- Document how to integrate with cron [#106](https://github.com/con/tinuous/pull/106) ([@jwodder](https://github.com/jwodder))
+
+#### 🧪 Tests
+
+- Test WorkflowSpec.match() [#112](https://github.com/con/tinuous/pull/112) ([@jwodder](https://github.com/jwodder))
+- Test removeprefix [#111](https://github.com/con/tinuous/pull/111) ([@jwodder](https://github.com/jwodder))
+- Update config file name in inception-test workflow [#103](https://github.com/con/tinuous/pull/103) ([@jwodder](https://github.com/jwodder))
+
+#### Authors: 1
+
+- John T. Wodder II ([@jwodder](https://github.com/jwodder))
+
+---
+
 # 0.3.0 (Sat Jun 12 2021)
 
 #### 🚀 Enhancement
