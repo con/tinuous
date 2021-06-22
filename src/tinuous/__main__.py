@@ -146,14 +146,18 @@ def fetch(config_file: str, state_path: Optional[str], sanitize_secrets: bool) -
     log.info("%d logs downloaded", logs_added)
     log.info("%d artifacts downloaded", artifacts_added)
     log.info("%d release assets downloaded", relassets_added)
-    if cfg.datalad.enabled and (logs_added or artifacts_added or relassets_added):
-        msg = f"[tinuous] {logs_added} logs added"
-        if artifacts_added:
-            msg += f", {artifacts_added} artifacts added"
-        if relassets_added:
-            msg += f", {relassets_added} release assets added"
-        msg += f"\n\nProduced by tinuous {__version__}"
-        ds.save(recursive=True, message=msg)
+    if cfg.datalad.enabled:
+        if logs_added or artifacts_added or relassets_added:
+            msg = f"[tinuous] {logs_added} logs added"
+            if artifacts_added:
+                msg += f", {artifacts_added} artifacts added"
+            if relassets_added:
+                msg += f", {relassets_added} release assets added"
+            msg += f"\n\nProduced by tinuous {__version__}"
+            ds.save(recursive=True, message=msg)
+        elif statefile.modified:
+            msg = f"[tinuous] Updated statefile\n\nProduced by tinuous {__version__}"
+            ds.save(recursive=True, message=msg)
 
 
 @main.command("sanitize")
