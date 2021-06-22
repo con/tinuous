@@ -20,6 +20,7 @@ class StateFile(BaseModel):
     path: Path
     state: State
     migrating: bool = False
+    modified: bool = False
 
     @classmethod
     def from_file(
@@ -60,6 +61,8 @@ class StateFile(BaseModel):
             return self.default_since
 
     def set_since(self, ciname: str, since: datetime) -> None:
+        if getattr(self.state, ciname) == since:
+            return
         setattr(self.state, ciname, since)
         log.debug("%s timestamp floor updated to %s", ciname, since)
         if self.migrating:
@@ -71,3 +74,4 @@ class StateFile(BaseModel):
             self.migrating = False
         else:
             self.path.write_text(self.state.json())
+        self.modified = True

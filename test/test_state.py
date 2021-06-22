@@ -27,6 +27,7 @@ def test_migration(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     )
     assert statefile.path == tmp_path / OLD_STATE_FILE
     assert statefile.migrating
+    assert not statefile.modified
 
     assert statefile.get_since("github") == datetime(
         2021, 6, 11, 14, 44, 17, tzinfo=timezone.utc
@@ -34,6 +35,15 @@ def test_migration(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     assert os.listdir() == [OLD_STATE_FILE]
     assert statefile.path == tmp_path / OLD_STATE_FILE
     assert statefile.migrating
+    assert not statefile.modified
+
+    statefile.set_since(
+        "github", datetime(2021, 6, 11, 14, 44, 17, tzinfo=timezone.utc)
+    )
+    assert os.listdir() == [OLD_STATE_FILE]
+    assert statefile.path == tmp_path / OLD_STATE_FILE
+    assert statefile.migrating
+    assert not statefile.modified
 
     newdt = datetime(2021, 6, 11, 14, 48, 39, tzinfo=timezone.utc)
     statefile.set_since("github", newdt)
@@ -45,6 +55,7 @@ def test_migration(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     )
     assert statefile.path == tmp_path / STATE_FILE
     assert not statefile.migrating
+    assert statefile.modified
     with open(STATE_FILE) as fp:
         data = json.load(fp)
     assert data == {
@@ -62,6 +73,7 @@ def test_defaulting(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     assert statefile.state == State(github=None, travis=None, appveyor=None)
     assert statefile.path == tmp_path / STATE_FILE
     assert not statefile.migrating
+    assert not statefile.modified
 
     assert statefile.get_since("github") == dt
     assert os.listdir() == []
@@ -70,6 +82,7 @@ def test_defaulting(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     statefile.set_since("github", newdt)
     assert os.listdir() == [STATE_FILE]
     assert statefile.state == State(github=newdt, travis=None, appveyor=None)
+    assert statefile.modified
     with open(STATE_FILE) as fp:
         data = json.load(fp)
     assert data == {
@@ -98,6 +111,7 @@ def test_empty(contents: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     assert statefile.state == State(github=None, travis=None, appveyor=None)
     assert statefile.path == tmp_path / STATE_FILE
     assert not statefile.migrating
+    assert not statefile.modified
 
     assert statefile.get_since("github") == dt
     assert os.listdir() == [STATE_FILE]
@@ -107,6 +121,7 @@ def test_empty(contents: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     statefile.set_since("github", newdt)
     assert os.listdir() == [STATE_FILE]
     assert statefile.state == State(github=newdt, travis=None, appveyor=None)
+    assert statefile.modified
     with f.open() as fp:
         data = json.load(fp)
     assert data == {
@@ -134,6 +149,7 @@ def test_populated_explicit_path(tmp_path: Path) -> None:
     assert statefile.state == State(github=ghdt, travis=travdt, appveyor=None)
     assert statefile.path == f
     assert not statefile.migrating
+    assert not statefile.modified
     assert statefile.get_since("github") == ghdt
     assert statefile.get_since("travis") == travdt
     assert statefile.get_since("appveyor") == dt
@@ -142,6 +158,7 @@ def test_populated_explicit_path(tmp_path: Path) -> None:
     assert statefile.state == State(github=newdt, travis=travdt, appveyor=None)
     assert statefile.path == f
     assert not statefile.migrating
+    assert statefile.modified
     with f.open() as fp:
         data = json.load(fp)
     assert data == {
