@@ -311,7 +311,7 @@ A sample config file:
         paths:
           logs: '{build_prefix}/{wf_name}/{number}/logs/'
           artifacts: '{build_prefix}/{wf_name}/{number}/artifacts/'
-          releases: '{path_prefix}/{type}/{release_tag}/'
+          releases: '{path_prefix}/{release_tag}/'
         workflows:
           - test_crippled.yml
           - test_extensions.yml
@@ -384,6 +384,7 @@ Placeholder             Definition
                         determined; for ``push``, this is the escaped [1]_ name
                         of the branch to which the push was made (or possibly
                         the tag that was pushed, if using Appveyor) [2]_
+``{release_tag}``       *(``releases_path`` only)* The release tag
 ``{build_commit}``      The hash of the commit the build ran against or that
                         was tagged for the release.  Note that, for PR builds
                         on Travis and Appveyor, this is the hash of an
@@ -548,12 +549,13 @@ is as follows:
 
        #!/bin/bash
        set -ex
-       cd "$(dirname "$0")"
        venv/bin/tinuous fetch
        git add --all
-       git commit -m "Ran tinuous"
-       # Uncomment if you want to push the commits to a remote repository:
-       #git push
+       if ! git diff --cached --quiet
+       then git commit -m "Ran tinuous"
+            # Uncomment if you want to push the commits to a remote repository:
+            #git push
+       fi
 
    and changing your cronjob to::
 
