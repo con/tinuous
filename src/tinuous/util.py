@@ -141,4 +141,10 @@ def get_github_token() -> str:
 
 
 def sanitize_pathname(s: str) -> str:
-    return re.sub(r'[\x5C/<>:|"?*]', "_", re.sub(r"\s", " ", s))
+    return re.sub(
+        r'[\0\x5C/<>:|"?*%]', lambda m: sanitize_str(m.group()), re.sub(r"\s", " ", s)
+    )
+
+
+def sanitize_str(s: str) -> str:
+    return "".join("%{:02x}".format(b) for b in s.encode("utf-8"))

@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, validator
 import requests
 from requests.exceptions import ChunkedEncodingError
 
-from .util import expand_template, log
+from .util import expand_template, log, sanitize_pathname
 
 COMMON_STATUS_MAP = {
     "success": "success",
@@ -177,7 +177,7 @@ class BuildAsset(ABC, BaseModel):
             "minute": utc_date.strftime("%M"),
             "second": utc_date.strftime("%S"),
             "type": self.event_type.value,
-            "type_id": self.event_id,
+            "type_id": sanitize_pathname(self.event_id),
             "build_commit": self.build_commit,
             "commit": commit,
             "number": str(self.number),
