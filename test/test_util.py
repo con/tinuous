@@ -8,6 +8,7 @@ from tinuous.util import (
     expand_template,
     parse_slice,
     removeprefix,
+    sanitize_pathname,
 )
 
 
@@ -125,3 +126,22 @@ def test_lazy_slicing_formatter_var_reuse(mocker: MockerFixture) -> None:
 )
 def test_removeprefix(s: str, prefix: str, result: str) -> None:
     assert removeprefix(s, prefix) == result
+
+
+@pytest.mark.parametrize(
+    "s1,s2",
+    [
+        ("\\x20", "%5cx20"),
+        ("foo/bar", "foo%2fbar"),
+        ("<angle>", "%3cangle%3e"),
+        ("foo:bar", "foo%3abar"),
+        ("foo|bar", "foo%7cbar"),
+        ('"foo"', "%22foo%22"),
+        ("foo?", "foo%3f"),
+        ("foo*bar", "foo%2abar"),
+        ("foo%20bar", "foo%2520bar"),
+        ("foo\0bar", "foo%00bar"),
+    ],
+)
+def test_sanitize_pathname(s1: str, s2: str) -> None:
+    assert sanitize_pathname(s1) == s2

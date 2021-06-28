@@ -381,9 +381,9 @@ Placeholder             Definition
                         ``cron`` and ``manual``, this is a timestamp for the
                         start of the build; for ``pr``, this is the number of
                         the associated pull request, or ``UNK`` if it cannot be
-                        determined; for ``push``, this is the name of the
-                        branch to which the push was made (or possibly the tag
-                        that was pushed, if using Appveyor) [1]_
+                        determined; for ``push``, this is the escaped [1]_ name
+                        of the branch to which the push was made (or possibly
+                        the tag that was pushed, if using Appveyor) [2]_
 ``{build_commit}``      The hash of the commit the build ran against or that
                         was tagged for the release.  Note that, for PR builds
                         on Travis and Appveyor, this is the hash of an
@@ -395,32 +395,37 @@ Placeholder             Definition
                         (along with PR builds on GitHub Actions), this is
                         always the same as ``{build_commit}``.
 ``{number}``            The run number of the workflow run (GitHub) or the
-                        build number (Travis and Appveyor) [1]_
+                        build number (Travis and Appveyor) [2]_
 ``{status}``            The success status of the workflow run (GitHub) or job
                         (Travis and Appveyor); the exact strings used depend on
-                        the CI system [1]_
+                        the CI system [2]_
 ``{common_status}``     The success status of the workflow run or job,
                         normalized into one of ``success``, ``failed``,
-                        ``errored``, or ``incomplete`` [1]_
-``{wf_name}``           *(GitHub only)* The name of the workflow [1]_
+                        ``errored``, or ``incomplete`` [2]_
+``{wf_name}``           *(GitHub only)* The escaped [1]_ name of the workflow
+                        [2]_
 ``{wf_file}``           *(GitHub only)* The basename of the workflow file
-                        (including the file extension) [1]_
-``{run_id}``            *(GitHub only)* The unique ID of the workflow run [1]_
+                        (including the file extension) [2]_
+``{run_id}``            *(GitHub only)* The unique ID of the workflow run [2]_
 ``{job}``               *(Travis and Appveyor only)* The number of the job,
                         without the build number prefix (Travis) or the job ID
-                        string (Appveyor) [1]_
+                        string (Appveyor) [2]_
 ``{job_index}``         *(Travis and Appveyor only)* The index of the job in
-                        the list returned by the API, starting from 1 [1]_
-``{job_env}``           *(Appveyor only)* The environment variables specific to
-                        the job [1]_
-``{job_env_hash}``      *(Appveyor only)* The SHA1 hash of ``{job_env}`` [1]_
+                        the list returned by the API, starting from 1 [2]_
+``{job_env}``           *(Appveyor only)* The escaped [1]_ environment
+                        variables specific to the job [2]_
+``{job_env_hash}``      *(Appveyor only)* The SHA1 hash of ``{job_env}`` before
+                        escaping [2]_
 ======================  =======================================================
 
 .. _datetime: https://docs.python.org/3/library/datetime.html#datetime-objects
 .. _strftime(): https://docs.python.org/3/library/datetime.html
                 #strftime-and-strptime-format-codes
 
-.. [1] These placeholders are only available for ``path`` and
+.. [1] Escaping consists of percent-encoding the characters ``\/<>:|"?*%`` and
+       replacing each whitespace character with a space.
+
+.. [2] These placeholders are only available for ``path`` and
        ``artifacts_path``, not ``releases_path``
 
 A placeholder's value may be truncated to the first ``n`` characters by writing
