@@ -551,9 +551,11 @@ is as follows:
        set -ex
        venv/bin/tinuous fetch
        git add --all
-       git commit -m "Ran tinuous"
-       # Uncomment if you want to push the commits to a remote repository:
-       #git push
+       if ! git diff --cached --quiet
+       then git commit -m "Ran tinuous"
+            # Uncomment if you want to push the commits to a remote repository:
+            #git push
+       fi
 
    and changing your cronjob to::
 
