@@ -1,16 +1,18 @@
 from datetime import datetime, timezone
-from functools import cached_property
+from functools import cached_property, wraps
 from io import BytesIO
 import os
 from pathlib import Path
 from shutil import rmtree
 import tempfile
 from time import sleep
-from typing import Any, Dict, Iterator, List, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Tuple
 from zipfile import ZipFile
 
 from github import Github
 from github.GithubException import RateLimitExceededException
+from github.GitRelease import GitRelease
+from github.GitReleaseAsset import GitReleaseAsset
 from github.Repository import Repository
 from github.Workflow import Workflow
 from github.WorkflowRun import WorkflowRun
@@ -36,6 +38,22 @@ from .util import (
 )
 
 
+def retry_ratelimit(func: Callable) -> Callable:
+    @wraps(func)
+    def wrapped(gha: "GitHubActions", *args: Any, **kwargs: Any) -> Any:
+        while True:
+            try:
+                return func(gha, *args, **kwargs)
+            except RateLimitExceededException:
+                delay = delay_until(
+                    ensure_aware(gha.client.get_rate_limit().core.reset)
+                )
+                log.warning("Rate limit exceeded; sleeping for %s seconds", delay)
+                sleep(delay)
+
+    return wrapped
+
+
 class GitHubActions(CISystem):
     workflow_spec: WorkflowSpec
     hash2pr: Dict[str, str] = Field(default_factory=dict)
@@ -59,14 +77,27 @@ class GitHubActions(CISystem):
             {"Authorization": f"token {self.token}"},
         )
 
-    @cached_property
+    @cached_property  # type: ignore[misc]
+    @retry_ratelimit
     def ghrepo(self) -> Repository:
         return self.client.get_repo(self.repo)
 
-    def get_workflows(self) -> Iterator[Workflow]:
+    @retry_ratelimit
+    def get_workflows(self) -> List[Workflow]:
+        workflows: List[Workflow] = []
         for wf in self.ghrepo.get_workflows():
             if self.workflow_spec.match(wf.path):
-                yield wf
+                workflows.append(wf)
+        return workflows
+
+    @retry_ratelimit
+    def get_runs(self, wf: Workflow, since: datetime) -> List[WorkflowRun]:
+        runs: List[WorkflowRun] = []
+        for r in wf.get_runs():
+            if ensure_aware(r.created_at) <= since:
+                break
+            runs.append(r)
+        return runs
 
     def get_build_assets(
         self, event_types: List[EventType], logs: bool, artifacts: bool
@@ -79,12 +110,10 @@ class GitHubActions(CISystem):
             log.info("Skipping runs newer than %s", self.until)
         for wf in self.get_workflows():
             log.info("Fetching runs for workflow %s (%s)", wf.path, wf.name)
-            for run in wf.get_runs():
+            for run in self.get_runs(wf, self.since):
                 run_event = EventType.from_gh_event(run.event)
                 ts = ensure_aware(run.created_at)
-                if ts <= self.since:
-                    break
-                elif self.until is not None and ts > self.until:
+                if self.until is not None and ts > self.until:
                     log.info("Run %s is too new; skipping", run.run_number)
                 elif run.status != "completed":
                     log.info("Run %s not completed; skipping", run.run_number)
@@ -149,20 +178,8 @@ class GitHubActions(CISystem):
                             pr = "UNK"
                             break
                         except RateLimitExceededException:
-                            reset_time = ensure_aware(
-                                self.client.get_rate_limit().search.reset
-                            )
-                            # Take `max()` just in case we're right up against
-                            # the reset time, and add 1 because `sleep()` isn't
-                            # always exactly accurate
-                            delay = (
-                                max(
-                                    (
-                                        reset_time - datetime.now().astimezone()
-                                    ).total_seconds(),
-                                    0,
-                                )
-                                + 1
+                            delay = delay_until(
+                                ensure_aware(self.client.get_rate_limit().search.reset)
                             )
                             log.warning(
                                 "Search rate limit exceeded; sleeping for %s seconds",
@@ -184,11 +201,19 @@ class GitHubActions(CISystem):
                     yield (artifact["name"], artifact["archive_download_url"])
             url = r.links.get("next", {}).get("url")
 
+    @retry_ratelimit
+    def get_releases(self) -> List[GitRelease]:
+        return list(self.ghrepo.get_releases())
+
+    @retry_ratelimit
+    def get_assets(self, rel: GitRelease) -> List[GitReleaseAsset]:
+        return list(rel.get_assets())
+
     def get_release_assets(self) -> Iterator["GHReleaseAsset"]:
         log.info("Fetching releases newer than %s", self.since)
         if self.until is not None:
             log.info("Skipping releases newer than %s", self.until)
-        for rel in self.ghrepo.get_releases():
+        for rel in self.get_releases():
             if rel.draft:
                 log.info("Release %s is draft; skipping", rel.tag_name)
                 continue
@@ -213,7 +238,7 @@ class GitHubActions(CISystem):
                 raise RuntimeError(
                     f"Unexpected type for tag {rel.tag_name}: {tagobj['type']!r}"
                 )
-            for asset in rel.get_assets():
+            for asset in self.get_assets(rel):
                 yield GHReleaseAsset(
                     client=self.extra_client,
                     published_at=ts,
@@ -425,3 +450,9 @@ class GHReleaseAsset(BaseModel):
         )
         self.client.download(self.download_url, target)
         return [target]
+
+
+def delay_until(dt: datetime) -> float:
+    # Take `max()` just in case we're right up against `dt`, and add 1 because
+    # `sleep()` isn't always exactly accurate
+    return max((dt - datetime.now(timezone.utc)).total_seconds(), 0) + 1
