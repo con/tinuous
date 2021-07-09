@@ -83,7 +83,7 @@ class APIClient:
                     "Request to %s returned %d; waiting & retrying", url, r.status_code
                 )
                 i += 1
-                sleep(i)
+                sleep(i * i)
             elif (
                 self.is_github
                 and r.status_code == 403
