@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, validator
 import requests
 from requests.exceptions import ChunkedEncodingError
 
-from .util import expand_template, log, sanitize_pathname
+from .util import delay_until, expand_template, log, sanitize_pathname
 
 COMMON_STATUS_MAP = {
     "success": "success",
@@ -64,10 +64,11 @@ class EventType(Enum):
 class APIClient:
     MAX_RETRIES = 10
 
-    def __init__(self, base_url: str, headers: Dict[str, str]):
+    def __init__(self, base_url: str, headers: Dict[str, str], is_github: bool = False):
         self.base_url = base_url
         self.session = requests.Session()
         self.session.headers.update(headers)
+        self.is_github = is_github
 
     def get(self, path: str, **kwargs: Any) -> requests.Response:
         if path.lower().startswith(("http://", "https://")):
@@ -75,16 +76,29 @@ class APIClient:
         else:
             url = self.base_url.rstrip("/") + "/" + path.lstrip("/")
         i = 0
-        r = self.session.get(url, **kwargs)
-        while r.status_code >= 500 and i < self.MAX_RETRIES:
-            log.warning(
-                "Request to %s returned %d; waiting & retrying", url, r.status_code
-            )
-            i += 1
-            sleep(i)
+        while True:
             r = self.session.get(url, **kwargs)
-        r.raise_for_status()
-        return r
+            if r.status_code >= 500 and i < self.MAX_RETRIES:
+                log.warning(
+                    "Request to %s returned %d; waiting & retrying", url, r.status_code
+                )
+                i += 1
+                sleep(i * i)
+            elif (
+                self.is_github
+                and r.status_code == 403
+                and "API rate limit exceeded" in r.json().get("message", "")
+            ):
+                delay = delay_until(
+                    datetime.fromtimestamp(
+                        int(r.headers["x-ratelimit-reset"]), tz=timezone.utc
+                    )
+                )
+                log.warning("Rate limit exceeded; sleeping for %s seconds", delay)
+                sleep(delay)
+            else:
+                r.raise_for_status()
+                return r
 
     def download(self, path: str, filepath: Path) -> None:
         i = 0

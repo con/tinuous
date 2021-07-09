@@ -148,3 +148,9 @@ def sanitize_pathname(s: str) -> str:
 
 def sanitize_str(s: str) -> str:
     return "".join("%{:02x}".format(b) for b in s.encode("utf-8"))
+
+
+def delay_until(dt: datetime) -> float:
+    # Take `max()` just in case we're right up against `dt`, and add 1 because
+    # `sleep()` isn't always exactly accurate
+    return max((dt - datetime.now(timezone.utc)).total_seconds(), 0) + 1
