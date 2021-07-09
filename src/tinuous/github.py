@@ -29,6 +29,7 @@ from .base import (
     WorkflowSpec,
 )
 from .util import (
+    delay_until,
     ensure_aware,
     expand_template,
     get_github_token,
@@ -75,6 +76,7 @@ class GitHubActions(CISystem):
         return APIClient(
             "https://api.github.com",
             {"Authorization": f"token {self.token}"},
+            is_github=True,
         )
 
     @cached_property  # type: ignore[misc]
@@ -450,9 +452,3 @@ class GHReleaseAsset(BaseModel):
         )
         self.client.download(self.download_url, target)
         return [target]
-
-
-def delay_until(dt: datetime) -> float:
-    # Take `max()` just in case we're right up against `dt`, and add 1 because
-    # `sleep()` isn't always exactly accurate
-    return max((dt - datetime.now(timezone.utc)).total_seconds(), 0) + 1
