@@ -1,3 +1,27 @@
+# 0.5.0 (Fri Jul 09 2021)
+
+#### 🚀 Enhancement
+
+- Escape branch names, workflow names, and Appveyor job envs with percent encoding [#123](https://github.com/con/tinuous/pull/123) ([@jwodder](https://github.com/jwodder))
+
+#### 🐛 Bug Fix
+
+- Wait & retry on rate limit errors for GitHub requests [#126](https://github.com/con/tinuous/pull/126) ([@jwodder](https://github.com/jwodder))
+
+#### 📝 Documentation
+
+- Minor README tweaks [#122](https://github.com/con/tinuous/pull/122) ([@jwodder](https://github.com/jwodder))
+
+#### 🧪 Tests
+
+- Install git-annex through neurodebian for more recent version [#127](https://github.com/con/tinuous/pull/127) ([@jwodder](https://github.com/jwodder))
+
+#### Authors: 1
+
+- John T. Wodder II ([@jwodder](https://github.com/jwodder))
+
+---
+
 # 0.4.0 (Tue Jun 22 2021)
 
 #### 🚀 Enhancement
