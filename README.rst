@@ -31,6 +31,9 @@
 only) artifacts & release assets for a GitHub repository from GitHub Actions,
 Travis-CI.com, and/or Appveyor.
 
+See <https://github.com/con/tinuous-inception> for an example setup that uses
+``tinuous`` with GitHub Actions to fetch the CI logs for ``tinuous`` itself.
+
 Installation
 ============
 ``tinuous`` requires Python 3.8 or higher.  Just use `pip
