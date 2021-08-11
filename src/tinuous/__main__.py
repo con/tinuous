@@ -55,6 +55,7 @@ def main(ctx: click.Context, config: str, log_level: int, env: Optional[str]) ->
         datefmt="%Y-%m-%dT%H:%M:%S%z",
         level=log_level,
     )
+    log.info("tinuous %s", __version__)
     ctx.obj = config
 
 
