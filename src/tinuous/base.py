@@ -3,10 +3,14 @@ from datetime import datetime, timezone
 from enum import Enum
 from functools import cached_property
 import heapq
+import os
 from pathlib import Path, PurePosixPath
 import re
+from shutil import rmtree
+import tempfile
 from time import sleep
 from typing import Any, Dict, Iterator, List, Optional, Pattern, Tuple, Union
+from zipfile import BadZipFile, ZipFile
 
 from pydantic import BaseModel, Field, validator
 import requests
@@ -63,6 +67,7 @@ class EventType(Enum):
 
 class APIClient:
     MAX_RETRIES = 10
+    ZIPFILE_RETRIES = 5
 
     def __init__(self, base_url: str, headers: Dict[str, str], is_github: bool = False):
         self.base_url = base_url
@@ -126,6 +131,32 @@ class APIClient:
             except BaseException:
                 filepath.unlink(missing_ok=True)
                 raise
+
+    def download_zipfile(self, path: str, target_dir: Path) -> None:
+        fd, fpath = tempfile.mkstemp()
+        os.close(fd)
+        zippath = Path(fpath)
+        i = 0
+        while True:
+            self.download(path, zippath)
+            try:
+                with ZipFile(zippath) as zf:
+                    zf.extractall(target_dir)
+            except BadZipFile:
+                rmtree(target_dir)
+                if i < self.ZIPFILE_RETRIES:
+                    log.error("Invalid zip file retrieved; waiting and retrying")
+                    i += 1
+                    sleep(i * i)
+                else:
+                    raise
+            except BaseException:
+                rmtree(target_dir)
+                raise
+            else:
+                break
+            finally:
+                zippath.unlink(missing_ok=True)
 
 
 class CISystem(ABC, BaseModel):
