@@ -1,13 +1,8 @@
 from datetime import datetime, timezone
 from functools import cached_property, wraps
-from io import BytesIO
-import os
 from pathlib import Path
-from shutil import rmtree
-import tempfile
 from time import sleep
 from typing import Any, Callable, Dict, Iterator, List, Tuple
-from zipfile import ZipFile
 
 from github import Github
 from github.GithubException import RateLimitExceededException
@@ -315,7 +310,7 @@ class GHABuildLog(GHAAsset, BuildLog):
             path,
         )
         try:
-            r = self.client.get(self.logs_url)
+            self.client.download_zipfile(self.logs_url, path)
         except requests.HTTPError as e:
             if e.response.status_code in (404, 410):
                 # 404 can happen when a workflow failed to run due to, say, a
@@ -326,12 +321,6 @@ class GHABuildLog(GHAAsset, BuildLog):
                 return []
             else:
                 raise
-        try:
-            with BytesIO(r.content) as blob, ZipFile(blob) as zf:
-                zf.extractall(path)
-        except BaseException:
-            rmtree(path)
-            raise
         return list(path.rglob("*.txt"))
 
 
@@ -387,18 +376,7 @@ class GHAArtifact(GHAAsset, Artifact):
             self.number,
             path,
         )
-        fd, fpath = tempfile.mkstemp()
-        os.close(fd)
-        zippath = Path(fpath)
-        self.client.download(self.download_url, zippath)
-        try:
-            with ZipFile(zippath) as zf:
-                zf.extractall(target_dir)
-        except BaseException:
-            rmtree(target_dir)
-            raise
-        finally:
-            zippath.unlink(missing_ok=True)
+        self.client.download_zipfile(self.download_url, target_dir)
         return list(iterfiles(target_dir))
 
 
