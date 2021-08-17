@@ -112,7 +112,7 @@ class APIClient:
                 except (ChunkedEncodingError, ReqConError) as e:
                     if i < self.MAX_RETRIES:
                         log.warning(
-                            "Download from %s interrupted: %s; waiting & retrying",
+                            "Download of %s interrupted: %s; waiting & retrying",
                             path,
                             str(e),
                         )
