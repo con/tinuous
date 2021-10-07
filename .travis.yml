@@ -3,6 +3,7 @@ cache: pip
 python:
   - '3.8'
   - '3.9'
+  - '3.10'
 env:
   - TOXENV=py
 jobs:
