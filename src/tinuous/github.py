@@ -5,7 +5,7 @@ from time import sleep
 from typing import Any, Callable, Dict, Iterator, List, Tuple
 
 from github import Github
-from github.GithubException import RateLimitExceededException
+from github.GithubException import GithubException, RateLimitExceededException
 from github.GitRelease import GitRelease
 from github.GitReleaseAsset import GitReleaseAsset
 from github.Repository import Repository
@@ -77,7 +77,22 @@ class GitHubActions(CISystem):
     @cached_property  # type: ignore[misc]
     @retry_ratelimit
     def ghrepo(self) -> Repository:
-        return self.client.get_repo(self.repo)
+        i = 0
+        while True:
+            try:
+                return self.client.get_repo(self.repo)
+            except GithubException as e:
+                if e.status == 502 and i < 10:
+                    log.warning(
+                        "Request to fetch %s GitHub repository details returned"
+                        " %d; waiting & retrying",
+                        self.repo,
+                        e.status,
+                    )
+                    i += 1
+                    sleep(i * i)
+                else:
+                    raise
 
     @retry_ratelimit
     def get_workflows(self) -> List[Workflow]:
