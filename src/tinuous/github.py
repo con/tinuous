@@ -5,9 +5,9 @@ from time import sleep
 from typing import Any, Callable, Dict, Iterator, List, Tuple
 
 from github import Github
-from github.GithubException import RateLimitExceededException
 from github.GitRelease import GitRelease
 from github.GitReleaseAsset import GitReleaseAsset
+from github.GithubException import RateLimitExceededException
 from github.Repository import Repository
 from github.Workflow import Workflow
 from github.WorkflowRun import WorkflowRun

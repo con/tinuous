@@ -1,6 +1,8 @@
 import re
 from typing import Any, Dict
+
 import pytest
+
 from tinuous.base import WorkflowSpec
 from tinuous.config import GHPathsDict, GitHubConfig
 

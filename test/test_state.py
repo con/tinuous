@@ -2,7 +2,9 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+
 import pytest
+
 from tinuous.state import OLD_STATE_FILE, STATE_FILE, State, StateFile
 
 
