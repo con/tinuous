@@ -1,8 +1,10 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any, Dict
+
 import pytest
 from pytest_mock import MockerFixture
+
 from tinuous.util import (
     LazySlicingFormatter,
     expand_template,

@@ -1,4 +1,5 @@
 import pytest
+
 from tinuous.base import WorkflowSpec
 
 

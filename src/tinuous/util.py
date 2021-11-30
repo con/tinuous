@@ -8,7 +8,6 @@ from string import Formatter
 import subprocess
 from typing import Any, Dict, Iterator, Mapping, Optional, Sequence, Union
 
-
 log = logging.getLogger("tinuous")
 
 
