@@ -57,7 +57,7 @@ def test_migration(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     )
     assert statefile.path == tmp_path / STATE_FILE
     assert not statefile.migrating
-    assert statefile.modified
+    assert statefile.modified  # type: ignore[unreachable]
     with open(STATE_FILE) as fp:
         data = json.load(fp)
     assert data == {
@@ -85,7 +85,7 @@ def test_defaulting(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     assert os.listdir() == [STATE_FILE]
     assert statefile.state == State(github=newdt, travis=None, appveyor=None)
     assert statefile.modified
-    with open(STATE_FILE) as fp:
+    with open(STATE_FILE) as fp:  # type: ignore[unreachable]
         data = json.load(fp)
     assert data == {
         "github": "2021-06-11T14:55:01+00:00",
@@ -124,7 +124,7 @@ def test_empty(contents: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     assert os.listdir() == [STATE_FILE]
     assert statefile.state == State(github=newdt, travis=None, appveyor=None)
     assert statefile.modified
-    with f.open() as fp:
+    with f.open() as fp:  # type: ignore[unreachable]
         data = json.load(fp)
     assert data == {
         "github": "2021-06-11T14:55:01+00:00",
@@ -161,7 +161,7 @@ def test_populated_explicit_path(tmp_path: Path) -> None:
     assert statefile.path == f
     assert not statefile.migrating
     assert statefile.modified
-    with f.open() as fp:
+    with f.open() as fp:  # type: ignore[unreachable]
         data = json.load(fp)
     assert data == {
         "github": "2021-06-11T15:11:50+00:00",
