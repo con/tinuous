@@ -1,3 +1,33 @@
+# 0.5.1 (Wed Jan 26 2022)
+
+#### 🐛 Bug Fix
+
+- Treat Travis jobs with "started" status as incomplete [#144](https://github.com/con/tinuous/pull/144) ([@jwodder](https://github.com/jwodder))
+- Retry downloads that fail with ConnectionError [#134](https://github.com/con/tinuous/pull/134) ([@jwodder](https://github.com/jwodder) [@yarikoptic](https://github.com/yarikoptic))
+- Retry Github.get_repo() requests that fail with 502 [#139](https://github.com/con/tinuous/pull/139) ([@jwodder](https://github.com/jwodder))
+- Log tinuous version at start of run [#133](https://github.com/con/tinuous/pull/133) ([@jwodder](https://github.com/jwodder))
+- Retry downloads of invalid zipfiles [#132](https://github.com/con/tinuous/pull/132) ([@jwodder](https://github.com/jwodder))
+
+#### 🏠 Internal
+
+- Update codecov action to v2 [#137](https://github.com/con/tinuous/pull/137) ([@jwodder](https://github.com/jwodder))
+- Replace flake8-import-order-jwodder with isort [#140](https://github.com/con/tinuous/pull/140) ([@jwodder](https://github.com/jwodder) [@yarikoptic](https://github.com/yarikoptic))
+
+#### 📝 Documentation
+
+- Link to tinuous-inception in README [#128](https://github.com/con/tinuous/pull/128) ([@jwodder](https://github.com/jwodder))
+
+#### 🧪 Tests
+
+- Ignore "unreachable" false-positives from mypy [#142](https://github.com/con/tinuous/pull/142) ([@jwodder](https://github.com/jwodder))
+
+#### Authors: 2
+
+- John T. Wodder II ([@jwodder](https://github.com/jwodder))
+- Yaroslav Halchenko ([@yarikoptic](https://github.com/yarikoptic))
+
+---
+
 # 0.5.0 (Fri Jul 09 2021)
 
 #### 🚀 Enhancement
