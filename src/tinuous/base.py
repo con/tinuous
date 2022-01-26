@@ -14,7 +14,8 @@ from zipfile import BadZipFile, ZipFile
 
 from pydantic import BaseModel, Field, validator
 import requests
-from requests.exceptions import ChunkedEncodingError, ConnectionError as ReqConError
+from requests.exceptions import ChunkedEncodingError
+from requests.exceptions import ConnectionError as ReqConError
 
 from .util import delay_until, expand_template, log, sanitize_pathname
 
@@ -32,6 +33,7 @@ COMMON_STATUS_MAP = {
     "canceled": "incomplete",
     "skipped": "incomplete",
     "stale": "incomplete",
+    "started": "incomplete",
     # Error on unknown so we're forced to categorize them.
 }
 
