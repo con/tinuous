@@ -1,3 +1,19 @@
+# 0.5.2 (Tue Apr 19 2022)
+
+#### 🐛 Bug Fix
+
+- Retry all GitHub requests that result in a 5xx [#146](https://github.com/con/tinuous/pull/146) ([@jwodder](https://github.com/jwodder))
+
+#### 🧪 Tests
+
+- Test against Python 3.10 [#136](https://github.com/con/tinuous/pull/136) ([@jwodder](https://github.com/jwodder))
+
+#### Authors: 1
+
+- John T. Wodder II ([@jwodder](https://github.com/jwodder))
+
+---
+
 # 0.5.1 (Wed Jan 26 2022)
 
 #### 🐛 Bug Fix
