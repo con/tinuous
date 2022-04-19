@@ -7,12 +7,13 @@ from typing import Any, Callable, Dict, Iterator, List, Tuple
 from github import Github
 from github.GitRelease import GitRelease
 from github.GitReleaseAsset import GitReleaseAsset
-from github.GithubException import GithubException, RateLimitExceededException
+from github.GithubException import RateLimitExceededException
 from github.Repository import Repository
 from github.Workflow import Workflow
 from github.WorkflowRun import WorkflowRun
 from pydantic import BaseModel, Field
 import requests
+from urllib3.util.retry import Retry
 
 from .base import (
     APIClient,
@@ -60,7 +61,14 @@ class GitHubActions(CISystem):
 
     @cached_property
     def client(self) -> Github:
-        return Github(self.token)
+        return Github(
+            self.token,
+            retry=Retry(
+                total=12,
+                backoff_factor=1.25,
+                status_forcelist=[500, 502, 503, 504],
+            ),
+        )
 
     @cached_property
     def extra_client(self) -> APIClient:
@@ -77,22 +85,7 @@ class GitHubActions(CISystem):
     @cached_property  # type: ignore[misc]
     @retry_ratelimit
     def ghrepo(self) -> Repository:
-        i = 0
-        while True:
-            try:
-                return self.client.get_repo(self.repo)
-            except GithubException as e:
-                if e.status == 502 and i < 10:
-                    log.warning(
-                        "Request to fetch %s GitHub repository details returned"
-                        " %d; waiting & retrying",
-                        self.repo,
-                        e.status,
-                    )
-                    i += 1
-                    sleep(i * i)
-                else:
-                    raise
+        return self.client.get_repo(self.repo)
 
     @retry_ratelimit
     def get_workflows(self) -> List[Workflow]:
@@ -204,7 +197,7 @@ class GitHubActions(CISystem):
             raise AssertionError(f"Unhandled EventType: {event_type!r}")
 
     def get_artifacts(self, run: WorkflowRun) -> Iterator[Tuple[str, str]]:
-        """ Yields each artifact as a (name, download_url) pair """
+        """Yields each artifact as a (name, download_url) pair"""
         url = run.artifacts_url
         while url is not None:
             r = self.extra_client.get(url)
