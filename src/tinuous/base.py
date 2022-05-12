@@ -68,7 +68,7 @@ class EventType(Enum):
 
 
 class APIClient:
-    MAX_RETRIES = 10
+    MAX_RETRIES = 12
     ZIPFILE_RETRIES = 5
 
     def __init__(self, base_url: str, headers: Dict[str, str], is_github: bool = False):
@@ -89,8 +89,8 @@ class APIClient:
                 log.warning(
                     "Request to %s returned %d; waiting & retrying", url, r.status_code
                 )
+                sleep(1.25 * 2**i)
                 i += 1
-                sleep(i * i)
             elif (
                 self.is_github
                 and r.status_code == 403
