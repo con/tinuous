@@ -1,3 +1,15 @@
+# 0.5.3 (Fri May 13 2022)
+
+#### 🐛 Bug Fix
+
+- Adjust retry parameters for non-Pygithub requests [#148](https://github.com/con/tinuous/pull/148) ([@jwodder](https://github.com/jwodder))
+
+#### Authors: 1
+
+- John T. Wodder II ([@jwodder](https://github.com/jwodder))
+
+---
+
 # 0.5.2 (Tue Apr 19 2022)
 
 #### 🐛 Bug Fix
