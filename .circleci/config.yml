@@ -1,0 +1,60 @@
+version: "2.1"
+
+orbs:
+  codecov: codecov/codecov@3.2.3
+
+commands:
+  install-deps:
+    description: Install dependencies
+    steps:
+      - run:
+          name: Install dependencies
+          command: |
+            python -m pip install --upgrade pip wheel
+            python -m pip install --upgrade --upgrade-strategy=eager tox
+
+workflows:
+  all-tests:
+    jobs:
+      - test:
+          matrix:
+            parameters:
+              python-version: ["3.8", "3.9", "3.10"]
+      - lint
+      - typing
+
+jobs:
+  test:
+    parameters:
+      python-version:
+        type: string
+    docker:
+      - image: cimg/python:<< parameters.python-version >>
+    steps:
+      - checkout
+      - install-deps
+      - run:
+          name: Run tests with coverage
+          command: tox -e py -- --cov-report=xml
+      - codecov/upload:
+          file: coverage.xml
+
+  lint:
+    docker:
+      - image: cimg/python:3.8
+    steps:
+      - checkout
+      - install-deps
+      - run:
+          name: Lint
+          command: tox -e lint
+
+  typing:
+    docker:
+      - image: cimg/python:3.8
+    steps:
+      - checkout
+      - install-deps
+      - run:
+          name: Type-check
+          command: tox -e typing
