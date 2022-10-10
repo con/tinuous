@@ -7,12 +7,13 @@ from typing import Any, Callable, Dict, Iterator, List, Tuple
 from github import Github
 from github.GitRelease import GitRelease
 from github.GitReleaseAsset import GitReleaseAsset
-from github.GithubException import RateLimitExceededException
+from github.GithubException import RateLimitExceededException, UnknownObjectException
 from github.Repository import Repository
 from github.Workflow import Workflow
 from github.WorkflowRun import WorkflowRun
 from pydantic import BaseModel, Field
 import requests
+from urllib3.exceptions import ResponseError
 from urllib3.util.retry import Retry
 
 from .base import (
@@ -98,11 +99,39 @@ class GitHubActions(CISystem):
     @retry_ratelimit
     def get_runs(self, wf: Workflow, since: datetime) -> List[WorkflowRun]:
         runs: List[WorkflowRun] = []
-        for r in wf.get_runs():
-            if ensure_aware(r.created_at) <= since:
-                break
-            runs.append(r)
-        return runs
+        try:
+            for r in wf.get_runs():
+                if ensure_aware(r.created_at) <= since:
+                    break
+                runs.append(r)
+            return runs
+        except requests.exceptions.RetryError as e:
+            reason = e.args[0].reason
+            if (
+                isinstance(reason, ResponseError)
+                and reason.args[0]
+                == ResponseError.SPECIFIC_ERROR.format(status_code=500)
+                and ensure_aware(wf.updated_at) <= since
+                and not (wf.path and self.has_file(wf.path))
+            ):
+                log.warning(
+                    "Request for runs for workflow %s (%s) returned 500, and"
+                    " workflow was deleted before starting timestamp; skipping",
+                    wf.path,
+                    wf.name,
+                )
+                return []
+            else:
+                raise
+
+    @retry_ratelimit
+    def has_file(self, path: str) -> bool:
+        try:
+            self.ghrepo.get_contents(path)
+        except UnknownObjectException:
+            return False
+        else:
+            return True
 
     def get_build_assets(
         self, event_types: List[EventType], logs: bool, artifacts: bool
