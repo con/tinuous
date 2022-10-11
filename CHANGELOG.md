@@ -1,3 +1,21 @@
+# 0.5.4 (Tue Oct 11 2022)
+
+#### 🐛 Bug Fix
+
+- Warn on & skip workflow runs for certain "broken" GitHub workflows [#151](https://github.com/con/tinuous/pull/151) ([@jwodder](https://github.com/jwodder))
+- Adjust tox invocation [#151](https://github.com/con/tinuous/pull/151) ([@jwodder](https://github.com/jwodder))
+
+#### ⚠️ Pushed to `master`
+
+- Disable Codecov in CircleCI ([@jwodder](https://github.com/jwodder))
+- Set up CircleCI ([@jwodder](https://github.com/jwodder))
+
+#### Authors: 1
+
+- John T. Wodder II ([@jwodder](https://github.com/jwodder))
+
+---
+
 # 0.5.3 (Fri May 13 2022)
 
 #### 🐛 Bug Fix
