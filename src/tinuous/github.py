@@ -35,6 +35,12 @@ from .util import (
     sanitize_pathname,
 )
 
+RETRY_STATUSES = [500, 502, 503, 504]
+
+RETRY_RESPONSE_ERRORS = {
+    ResponseError.SPECIFIC_ERROR.format(status_code=c): c for c in RETRY_STATUSES
+}
+
 
 def retry_ratelimit(func: Callable) -> Callable:
     @wraps(func)
@@ -67,7 +73,7 @@ class GitHubActions(CISystem):
             retry=Retry(
                 total=12,
                 backoff_factor=1.25,
-                status_forcelist=[500, 502, 503, 504],
+                status_forcelist=RETRY_STATUSES,
             ),
         )
 
@@ -109,16 +115,16 @@ class GitHubActions(CISystem):
             reason = e.args[0].reason
             if (
                 isinstance(reason, ResponseError)
-                and reason.args[0]
-                == ResponseError.SPECIFIC_ERROR.format(status_code=500)
+                and reason.args[0] in RETRY_RESPONSE_ERRORS
                 and ensure_aware(wf.updated_at) <= since
                 and not (wf.path and self.has_file(wf.path))
             ):
                 log.warning(
-                    "Request for runs for workflow %s (%s) returned 500, and"
+                    "Request for runs for workflow %s (%s) returned %d, and"
                     " workflow was deleted before starting timestamp; skipping",
                     wf.path,
                     wf.name,
+                    RETRY_RESPONSE_ERRORS[reason.args[0]],
                 )
                 return []
             else:
