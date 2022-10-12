@@ -15,12 +15,12 @@ jobs:
           - datalad
     steps:
       - name: Check out repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: 3.8
 
@@ -37,7 +37,7 @@ jobs:
           datalad-installer --sudo ok neurodebian git-annex -m neurodebian
 
       - name: Checkout con/tinuous-inception
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: con/tinuous-inception
           path: tinuous-inception
@@ -69,7 +69,7 @@ jobs:
         working-directory: tinuous-inception
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v2
+        uses: codecov/codecov-action@v3
         with:
           files: tinuous-inception/coverage.xml
           fail_ci_if_error: false
