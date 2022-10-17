@@ -17,16 +17,13 @@ class State(BaseModel):
 
 
 class StateFile(BaseModel):
-    default_since: datetime
     path: Path
     state: State
     migrating: bool = False
     modified: bool = False
 
     @classmethod
-    def from_file(
-        cls, default_since: datetime, path: Union[str, Path, None] = None
-    ) -> "StateFile":
+    def from_file(cls, path: Union[str, Path, None] = None) -> "StateFile":
         migrating = False
         p: Path
         if path is None:
@@ -50,16 +47,12 @@ class StateFile(BaseModel):
                 state = State()
             else:
                 state = State.parse_raw(s)
-        return cls(
-            default_since=default_since, path=p, state=state, migrating=migrating
-        )
+        return cls(path=p, state=state, migrating=migrating)
 
-    def get_since(self, ciname: str) -> datetime:
-        if (t := getattr(self.state, ciname)) is not None:
-            assert isinstance(t, datetime)
-            return max(t, self.default_since)
-        else:
-            return self.default_since
+    def get_since(self, ciname: str) -> Optional[datetime]:
+        t = getattr(self.state, ciname)
+        assert t is None or isinstance(t, datetime)
+        return t
 
     def set_since(self, ciname: str, since: datetime) -> None:
         if getattr(self.state, ciname) == since:

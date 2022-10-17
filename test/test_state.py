@@ -18,9 +18,7 @@ def test_migration(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
             },
             fp,
         )
-    statefile = StateFile.from_file(
-        datetime(2020, 1, 2, 3, 4, 5, tzinfo=timezone.utc), None
-    )
+    statefile = StateFile.from_file(None)
     assert os.listdir() == [OLD_STATE_FILE]
     assert statefile.state == State(
         github=datetime(2021, 6, 11, 14, 44, 17, tzinfo=timezone.utc),
@@ -69,15 +67,14 @@ def test_migration(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
 def test_defaulting(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.chdir(tmp_path)
-    dt = datetime.now(timezone.utc)
-    statefile = StateFile.from_file(dt, None)
+    statefile = StateFile.from_file(None)
     assert os.listdir() == []
     assert statefile.state == State(github=None, travis=None, appveyor=None)
     assert statefile.path == tmp_path / STATE_FILE
     assert not statefile.migrating
     assert not statefile.modified
 
-    assert statefile.get_since("github") == dt
+    assert statefile.get_since("github") is None
     assert os.listdir() == []
 
     newdt = datetime(2021, 6, 11, 14, 55, 1, tzinfo=timezone.utc)
@@ -107,15 +104,14 @@ def test_empty(contents: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     monkeypatch.chdir(tmp_path)
     f = Path(STATE_FILE)
     f.write_text(contents)
-    dt = datetime.now(timezone.utc)
-    statefile = StateFile.from_file(dt, None)
+    statefile = StateFile.from_file(None)
     assert os.listdir() == [STATE_FILE]
     assert statefile.state == State(github=None, travis=None, appveyor=None)
     assert statefile.path == tmp_path / STATE_FILE
     assert not statefile.migrating
     assert not statefile.modified
 
-    assert statefile.get_since("github") == dt
+    assert statefile.get_since("github") is None
     assert os.listdir() == [STATE_FILE]
     assert f.read_text() == contents
 
@@ -144,8 +140,7 @@ def test_populated_explicit_path(tmp_path: Path) -> None:
             },
             fp,
         )
-    dt = datetime(2020, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
-    statefile = StateFile.from_file(dt, f)
+    statefile = StateFile.from_file(f)
     ghdt = datetime(2021, 6, 11, 15, 7, 41, tzinfo=timezone.utc)
     travdt = datetime(2021, 2, 3, 4, 5, 6, tzinfo=timezone.utc)
     assert statefile.state == State(github=ghdt, travis=travdt, appveyor=None)
@@ -154,7 +149,7 @@ def test_populated_explicit_path(tmp_path: Path) -> None:
     assert not statefile.modified
     assert statefile.get_since("github") == ghdt
     assert statefile.get_since("travis") == travdt
-    assert statefile.get_since("appveyor") == dt
+    assert statefile.get_since("appveyor") is None
     newdt = datetime(2021, 6, 11, 15, 11, 50, tzinfo=timezone.utc)
     statefile.set_since("github", newdt)
     assert statefile.state == State(github=newdt, travis=travdt, appveyor=None)
@@ -168,24 +163,3 @@ def test_populated_explicit_path(tmp_path: Path) -> None:
         "travis": "2021-02-03T04:05:06+00:00",
         "appveyor": None,
     }
-
-
-def test_newer_since(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.chdir(tmp_path)
-    with open(STATE_FILE, "w") as fp:
-        json.dump(
-            {
-                "github": "2021-06-11T15:07:41+00:00",
-                "travis": "2021-02-03T04:05:06+00:00",
-                "appveyor": None,
-            },
-            fp,
-        )
-    dt = datetime(2021, 6, 5, 4, 3, 2, tzinfo=timezone.utc)
-    statefile = StateFile.from_file(dt, None)
-    ghdt = datetime(2021, 6, 11, 15, 7, 41, tzinfo=timezone.utc)
-    travdt = datetime(2021, 2, 3, 4, 5, 6, tzinfo=timezone.utc)
-    assert statefile.state == State(github=ghdt, travis=travdt, appveyor=None)
-    assert statefile.get_since("github") == ghdt
-    assert statefile.get_since("travis") == dt
-    assert statefile.get_since("appveyor") == dt

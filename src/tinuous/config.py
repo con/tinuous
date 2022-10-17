@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import re
 from typing import Any, Dict, Iterator, List, Optional, Pattern, Tuple
 
@@ -10,6 +10,7 @@ from .appveyor import Appveyor
 from .base import CISystem, EventType, NoExtraModel, WorkflowSpec
 from .github import GitHubActions
 from .travis import Travis
+from .util import log
 
 
 class PathsDict(NoExtraModel):
@@ -158,7 +159,8 @@ class Config(NoExtraModel):
     repo: str
     vars: Dict[str, str] = Field(default_factory=dict)
     ci: CIConfigDict
-    since: datetime
+    since: Optional[datetime] = None
+    max_days_back: int = Field(30, alias="max-days-back")
     until: Optional[datetime] = None
     types: List[EventType] = Field(default_factory=lambda: list(EventType))
     secrets: Dict[str, Pattern] = Field(default_factory=dict)
@@ -178,3 +180,20 @@ class Config(NoExtraModel):
         if v is not None and v.tzinfo is None:
             raise ValueError(f"{field.name!r} timestamp must include timezone offset")
         return v
+
+    def get_since(self, state_since: Optional[datetime]) -> datetime:
+        max_dt_back = datetime.now(timezone.utc) - timedelta(days=self.max_days_back)
+        if state_since is None:
+            return self.since if self.since is not None else max_dt_back
+        elif self.since is None or self.since <= state_since:
+            return max(state_since, max_dt_back)
+        else:
+            if self.since < max_dt_back:
+                # Because state_since < self.since, assume the user explicitly
+                # edited `since` and thus wants it to take precedence over
+                # max-days-back (but still warn that's what we're doing)
+                log.warning(
+                    "`since` option appears to have been manually updated;"
+                    " ignoring `max-days-back`"
+                )
+            return self.since
