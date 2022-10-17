@@ -48,7 +48,7 @@ from .util import log
 )
 @click.pass_context
 def main(ctx: click.Context, config: str, log_level: int, env: Optional[str]) -> None:
-    """ Download build logs from GitHub Actions, Travis, and Appveyor """
+    """Download build logs from GitHub Actions, Travis, and Appveyor"""
     load_dotenv(env)
     logging.basicConfig(
         format="%(asctime)s [%(levelname)-8s] %(name)s %(message)s",
@@ -74,7 +74,7 @@ def main(ctx: click.Context, config: str, log_level: int, env: Optional[str]) ->
 )
 @click.pass_obj
 def fetch(config_file: str, state_path: Optional[str], sanitize_secrets: bool) -> None:
-    """ Download logs """
+    """Download logs"""
     try:
         with open(config_file) as fp:
             cfg = Config.parse_obj(safe_load(fp))
@@ -82,7 +82,7 @@ def fetch(config_file: str, state_path: Optional[str], sanitize_secrets: bool) -
         raise click.UsageError(f"Configuration file not found: {config_file}")
     if sanitize_secrets and not cfg.secrets:
         log.warning("--sanitize-secrets set but no secrets given in configuration")
-    statefile = StateFile.from_file(cfg.since, state_path)
+    statefile = StateFile.from_file(state_path)
     # Fetch tokens early in order to catch failures early:
     tokens: Dict[str, Dict[str, str]] = {}
     for name, cicfg in cfg.ci.items():
@@ -103,7 +103,7 @@ def fetch(config_file: str, state_path: Optional[str], sanitize_secrets: bool) -
             log.info("No paths configured for %s; skipping", name)
             continue
         log.info("Fetching resources from %s", name)
-        since = statefile.get_since(name)
+        since = cfg.get_since(statefile.get_since(name))
         ci = cicfg.get_system(
             repo=cfg.repo, since=since, until=cfg.until, tokens=tokens[name]
         )
@@ -167,7 +167,7 @@ def fetch(config_file: str, state_path: Optional[str], sanitize_secrets: bool) -
 )
 @click.pass_obj
 def sanitize_cmd(config_file: str, path: List[str]) -> None:
-    """ Sanitize secrets in logs """
+    """Sanitize secrets in logs"""
     try:
         with open(config_file) as fp:
             cfg = Config.parse_obj(safe_load(fp))

@@ -236,8 +236,9 @@ keys:
             it is assumed that the slug is the same as the repository name
 
 ``since``
-    *(required)* A timestamp (date, time, & timezone); only assets for builds
-    started after the given point in time will be retrieved
+    A timestamp (date, time, & timezone); only assets for builds started after
+    the given point in time will be retrieved.  If not specified, the cutoff
+    set by ``max-days-back`` will be used.
 
     As the script retrieves new build assets, it keeps track of their starting
     points.  Once the assets for all builds for the given CI system &
@@ -247,6 +248,16 @@ keys:
     ``since`` setting in the configuration file is then updated to a newer
     timestamp, the configuration will override the value in the state file, and
     the next ``tinuous`` run will only retrieve assets after the new setting.
+
+``max-days-back``
+    An integer specifying the maximum number of days back to look for builds;
+    defaults to 30.
+
+    If ``since`` is earlier than the date indicated by this value, and if the
+    timestamp for a given CI system saved in the state file is either missing
+    (i.e., if this is the first run of ``tinuous`` against the CI system) or
+    older than ``since``, then ``tinuous`` will use the explicitly-specified
+    ``since`` value as the cutoff and ignore ``max-days-back``.
 
 ``until``
     A timestamp (date, time, & timezone); only assets for builds started before
@@ -263,7 +274,7 @@ keys:
         A build run on a schedule
 
     ``manual``
-        A build trigger manually by a human or through the CI system's API
+        A build triggered manually by a human or through the CI system's API
 
     ``pr``
         A build in response to activity on a pull request
@@ -328,6 +339,7 @@ A sample config file:
         accountName: mih
         projectSlug: datalad
     since: 2021-01-20T00:00:00Z
+    max-days-back: 14
     types: [cron, manual, pr, push]
     secrets:
       github: '\bgh[a-z]_[A-Za-z0-9]{36,}\b'
