@@ -1,3 +1,19 @@
+# 0.6.0 (Mon Oct 17 2022)
+
+#### 🚀 Enhancement
+
+- Add `max-days-back` config option [#155](https://github.com/con/tinuous/pull/155) ([@jwodder](https://github.com/jwodder))
+
+#### 🏠 Internal
+
+- Update GitHub Actions action versions [#153](https://github.com/con/tinuous/pull/153) ([@jwodder](https://github.com/jwodder))
+
+#### Authors: 1
+
+- John T. Wodder II ([@jwodder](https://github.com/jwodder))
+
+---
+
 # 0.5.4 (Tue Oct 11 2022)
 
 #### 🐛 Bug Fix
