@@ -8,6 +8,8 @@ environment:
       TOXENV: py
     - PY: '3.10'
       TOXENV: py
+    - PY: '3.11'
+      TOXENV: py
     - PY: '3.8'
       TOXENV: lint
     - PY: '3.8'
