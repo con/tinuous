@@ -1,3 +1,17 @@
+# 0.6.1 (Thu Feb 09 2023)
+
+#### 🐛 Bug Fix
+
+- Treat GitHub workflows triggered on `pull_request_target` as "pr" events [#161](https://github.com/con/tinuous/pull/161) ([@jwodder](https://github.com/jwodder))
+- Revert PR #151 [#157](https://github.com/con/tinuous/pull/157) ([@jwodder](https://github.com/jwodder))
+- Warn on & skip workflow runs for certain "broken" GitHub workflows [#151](https://github.com/con/tinuous/pull/151) ([@jwodder](https://github.com/jwodder))
+
+#### Authors: 1
+
+- John T. Wodder II ([@jwodder](https://github.com/jwodder))
+
+---
+
 # 0.6.0 (Mon Oct 17 2022)
 
 #### 🚀 Enhancement
