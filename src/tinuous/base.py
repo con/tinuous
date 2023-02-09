@@ -53,6 +53,7 @@ class EventType(Enum):
             "schedule": cls.CRON,
             "push": cls.PUSH,
             "pull_request": cls.PULL_REQUEST,
+            "pull_request_target": cls.PULL_REQUEST,
             "workflow_dispatch": cls.MANUAL,
             "repository_dispatch": cls.MANUAL,
         }.get(gh_event)
