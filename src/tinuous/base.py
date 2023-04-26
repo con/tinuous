@@ -37,7 +37,7 @@ COMMON_STATUS_MAP = {
     "skipped": "incomplete",
     "stale": "incomplete",
     "started": "incomplete",
-    # CircleCI:
+    # Statuses specific to CircleCI:
     "retried": "incomplete",
     "infrastructure_fail": "errored",
     "timedout": "errored",
