@@ -54,7 +54,7 @@ def main(ctx: click.Context, config: str, log_level: int, env: Optional[str]) ->
     """Download build logs from GitHub Actions, Travis, and Appveyor"""
     load_dotenv(env)
     logging.basicConfig(
-        format="%(asctime)s [%(levelname)-8s] %(name)s %(message)s",
+        format="%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
         datefmt="%Y-%m-%dT%H:%M:%S%z",
         level=log_level,
     )
