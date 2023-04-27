@@ -233,8 +233,8 @@ class BuildAsset(ABC, BaseModel):
             "common_status": COMMON_STATUS_MAP[self.status],
         }
 
-    def expand_path(self, path_template: str, vars: Dict[str, str]) -> str:
-        return expand_template(path_template, self.path_fields(), vars)
+    def expand_path(self, path_template: str, variables: Dict[str, str]) -> str:
+        return expand_template(path_template, self.path_fields(), variables)
 
     @abstractmethod
     def download(self, path: Path) -> List[Path]:

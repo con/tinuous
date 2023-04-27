@@ -416,8 +416,8 @@ class GHReleaseAsset(BaseModel):
             "commit": self.commit,
         }
 
-    def expand_path(self, path_template: str, vars: Dict[str, str]) -> str:
-        return expand_template(path_template, self.path_fields(), vars)
+    def expand_path(self, path_template: str, variables: Dict[str, str]) -> str:
+        return expand_template(path_template, self.path_fields(), variables)
 
     def download(self, path: Path) -> List[Path]:
         target = path / self.name

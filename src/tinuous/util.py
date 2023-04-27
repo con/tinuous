@@ -99,9 +99,9 @@ class LazySlicingFormatter(Formatter):
 
 
 def expand_template(
-    template_str: str, fields: Dict[str, Any], vars: Dict[str, str]
+    template_str: str, fields: Dict[str, Any], variables: Dict[str, str]
 ) -> str:
-    return LazySlicingFormatter(vars).format(template_str, **fields)
+    return LazySlicingFormatter(variables).format(template_str, **fields)
 
 
 SLICE_RGX = re.compile(r"(?P<start>-?\d+)?:(?P<stop>-?\d+)?(?::(?P<step>-?\d+)?)?")
