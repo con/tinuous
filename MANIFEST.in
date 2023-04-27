@@ -1,4 +1,3 @@
 include CHANGELOG.md LICENSE tox.ini
-include versioneer.py
 graft test
 global-exclude *.py[cod]
