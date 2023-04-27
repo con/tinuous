@@ -1,6 +1,6 @@
 [build-system]
-requires = [
-    "setuptools >= 46.4.0",
-    "wheel ~= 0.32"
-]
+requires = ["setuptools >= 46.4.0", "versioningit"]
 build-backend = "setuptools.build_meta"
+
+[tool.versioningit.write]
+file = "src/tinuous/_version.py"

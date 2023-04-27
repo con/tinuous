@@ -15,7 +15,6 @@ __maintainer_email__ = "tinuous@varonathe.org"
 __license__ = "MIT"
 __url__ = "https://github.com/con/tinuous"
 
-from ._version import get_versions
+from ._version import __version__
 
-__version__ = get_versions()["version"]
-del get_versions
+__all__ = ["__version__"]

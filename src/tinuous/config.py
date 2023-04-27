@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
 import re
-from typing import Any, Dict, Iterator, List, Optional, Pattern, Tuple
+from typing import Any, Dict, List, Optional, Pattern
 
 from pydantic import Field, validator
 from pydantic.fields import ModelField
@@ -39,7 +42,7 @@ class CIConfig(NoExtraModel, ABC):
 
     @staticmethod
     @abstractmethod
-    def get_auth_tokens() -> Dict[str, str]:
+    def get_auth_tokens() -> dict[str, str]:
         ...  # pragma: no cover
 
     @abstractmethod
@@ -48,7 +51,7 @@ class CIConfig(NoExtraModel, ABC):
         repo: str,
         since: datetime,
         until: Optional[datetime],
-        tokens: Dict[str, str],
+        tokens: dict[str, str],
     ) -> CISystem:
         ...  # pragma: no cover
 
@@ -71,7 +74,7 @@ class GitHubConfig(CIConfig):
             return v
 
     @staticmethod
-    def get_auth_tokens() -> Dict[str, str]:
+    def get_auth_tokens() -> dict[str, str]:
         return GitHubActions.get_auth_tokens()
 
     def get_system(
@@ -79,7 +82,7 @@ class GitHubConfig(CIConfig):
         repo: str,
         since: datetime,
         until: Optional[datetime],
-        tokens: Dict[str, str],
+        tokens: dict[str, str],
     ) -> GitHubActions:
         return GitHubActions(
             repo=repo,
@@ -92,7 +95,7 @@ class GitHubConfig(CIConfig):
 
 class TravisConfig(CIConfig):
     @staticmethod
-    def get_auth_tokens() -> Dict[str, str]:
+    def get_auth_tokens() -> dict[str, str]:
         return Travis.get_auth_tokens()
 
     def get_system(
@@ -100,7 +103,7 @@ class TravisConfig(CIConfig):
         repo: str,
         since: datetime,
         until: Optional[datetime],
-        tokens: Dict[str, str],
+        tokens: dict[str, str],
     ) -> Travis:
         return Travis(
             repo=repo,
@@ -116,7 +119,7 @@ class AppveyorConfig(CIConfig):
     projectSlug: Optional[str] = None
 
     @staticmethod
-    def get_auth_tokens() -> Dict[str, str]:
+    def get_auth_tokens() -> dict[str, str]:
         return Appveyor.get_auth_tokens()
 
     def get_system(
@@ -124,7 +127,7 @@ class AppveyorConfig(CIConfig):
         repo: str,
         since: datetime,
         until: Optional[datetime],
-        tokens: Dict[str, str],
+        tokens: dict[str, str],
     ) -> Appveyor:
         return Appveyor(
             repo=repo,
@@ -141,7 +144,7 @@ class CIConfigDict(NoExtraModel):
     travis: Optional[TravisConfig] = None
     appveyor: Optional[AppveyorConfig] = None
 
-    def items(self) -> Iterator[Tuple[str, CIConfig]]:
+    def items(self) -> Iterator[tuple[str, CIConfig]]:
         if self.github is not None:
             yield ("github", self.github)
         if self.travis is not None:

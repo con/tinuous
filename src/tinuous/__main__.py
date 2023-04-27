@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Match, Optional, Pattern
+import re
+from typing import Any, Optional
 
 import click
 from click_loglevel import LogLevel
@@ -51,7 +54,7 @@ def main(ctx: click.Context, config: str, log_level: int, env: Optional[str]) ->
     """Download build logs from GitHub Actions, Travis, and Appveyor"""
     load_dotenv(env)
     logging.basicConfig(
-        format="%(asctime)s [%(levelname)-8s] %(name)s %(message)s",
+        format="%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
         datefmt="%Y-%m-%dT%H:%M:%S%z",
         level=log_level,
     )
@@ -84,7 +87,7 @@ def fetch(config_file: str, state_path: Optional[str], sanitize_secrets: bool) -
         log.warning("--sanitize-secrets set but no secrets given in configuration")
     statefile = StateFile.from_file(state_path)
     # Fetch tokens early in order to catch failures early:
-    tokens: Dict[str, Dict[str, str]] = {}
+    tokens: dict[str, dict[str, str]] = {}
     for name, cicfg in cfg.ci.items():
         tokens[name] = cicfg.get_auth_tokens()
     if cfg.datalad.enabled:
@@ -166,7 +169,7 @@ def fetch(config_file: str, state_path: Optional[str], sanitize_secrets: bool) -
     "path", type=click.Path(exists=True, dir_okay=False, writable=True), nargs=-1
 )
 @click.pass_obj
-def sanitize_cmd(config_file: str, path: List[str]) -> None:
+def sanitize_cmd(config_file: str, path: list[str]) -> None:
     """Sanitize secrets in logs"""
     try:
         with open(config_file) as fp:
@@ -178,9 +181,11 @@ def sanitize_cmd(config_file: str, path: List[str]) -> None:
 
 
 def sanitize(
-    p: Path, secrets: Dict[str, Pattern], allow_secrets: Optional[Pattern]
+    p: Path,
+    secrets: dict[str, re.Pattern[str]],
+    allow_secrets: Optional[re.Pattern[str]],
 ) -> None:
-    def replace(m: Match) -> str:
+    def replace(m: re.Match[str]) -> str:
         s = m.group()
         assert isinstance(s, str)
         if allow_secrets is not None and allow_secrets.search(s):

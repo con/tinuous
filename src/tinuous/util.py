@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from collections import deque
+from collections.abc import Iterator, Mapping, Sequence
 from datetime import datetime, timezone
 import logging
 import os
@@ -6,7 +9,7 @@ from pathlib import Path
 import re
 from string import Formatter
 import subprocess
-from typing import Any, Dict, Iterator, Mapping, Optional, Sequence, Union
+from typing import Any, Optional
 
 log = logging.getLogger("tinuous")
 
@@ -43,13 +46,13 @@ class LazySlicingFormatter(Formatter):
     - supports indexing strings & other sequences with slices
     """
 
-    def __init__(self, var_defs: Dict[str, str]):
-        self.var_defs: Dict[str, str] = var_defs
-        self.expanded_vars: Dict[str, str] = {}
+    def __init__(self, var_defs: dict[str, str]):
+        self.var_defs: dict[str, str] = var_defs
+        self.expanded_vars: dict[str, str] = {}
         super().__init__()
 
     def get_value(
-        self, key: Union[int, str], args: Sequence[Any], kwargs: Mapping[str, Any]
+        self, key: int | str, args: Sequence[Any], kwargs: Mapping[str, Any]
     ) -> Any:
         if isinstance(key, int):
             return args[key]
@@ -70,7 +73,7 @@ class LazySlicingFormatter(Formatter):
         assert m, f"format field name {field_name!r} does not start with arg_name"
         s_key = m.group()
         assert isinstance(s_key, str)
-        key: Union[int, str]
+        key: int | str
         if s_key.isdigit():
             key = int(s_key)
         else:
@@ -99,9 +102,9 @@ class LazySlicingFormatter(Formatter):
 
 
 def expand_template(
-    template_str: str, fields: Dict[str, Any], vars: Dict[str, str]
+    template_str: str, fields: dict[str, Any], variables: dict[str, str]
 ) -> str:
-    return LazySlicingFormatter(vars).format(template_str, **fields)
+    return LazySlicingFormatter(variables).format(template_str, **fields)
 
 
 SLICE_RGX = re.compile(r"(?P<start>-?\d+)?:(?P<stop>-?\d+)?(?::(?P<step>-?\d+)?)?")

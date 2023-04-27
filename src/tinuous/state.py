@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -23,7 +25,7 @@ class StateFile(BaseModel):
     modified: bool = False
 
     @classmethod
-    def from_file(cls, path: Union[str, Path, None] = None) -> "StateFile":
+    def from_file(cls, path: str | Path | None = None) -> StateFile:
         migrating = False
         p: Path
         if path is None:

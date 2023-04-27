@@ -9,6 +9,7 @@
 .pytest_cache/
 .tox/
 __pycache__/
+_version.py
 build/
 dist/
 docs/.doctrees/
