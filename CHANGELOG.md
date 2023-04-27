@@ -186,7 +186,7 @@
 
 #### 🐛 Bug Fix
 
-- Retry downloads interrupted by connnection resets [#91](https://github.com/con/tinuous/pull/91) ([@jwodder](https://github.com/jwodder))
+- Retry downloads interrupted by connection resets [#91](https://github.com/con/tinuous/pull/91) ([@jwodder](https://github.com/jwodder))
 - Skip GitHub logs that return 410 [#87](https://github.com/con/tinuous/pull/87) ([@jwodder](https://github.com/jwodder))
 - Don't expand unused vars [#79](https://github.com/con/tinuous/pull/79) ([@jwodder](https://github.com/jwodder))
 - Better `{commit}` lookup for Travis builds [#71](https://github.com/con/tinuous/pull/71) ([@jwodder](https://github.com/jwodder))
