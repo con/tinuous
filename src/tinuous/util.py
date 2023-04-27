@@ -10,8 +10,8 @@ from pathlib import Path
 import re
 from string import Formatter
 import subprocess
-from typing import Any, Optional
 from time import time
+from typing import Any, Optional
 
 log = logging.getLogger("tinuous")
 

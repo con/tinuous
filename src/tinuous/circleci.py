@@ -133,6 +133,9 @@ class CircleCI(CISystem):
                         raise AssertionError(f"Unhandled EventType: {run_event!r}")
                     for wf in workflows:
                         for job in self.get_jobs(wf.id):
+                            if job.job_number is None:
+                                # This can happen if the job was cancelled.
+                                continue
                             if logs:
                                 for step in self.get_jobv1(job.job_number).steps:
                                     for action in step.actions:
@@ -437,7 +440,7 @@ class Workflow(BaseModel):
 class Job(BaseModel):
     # canceled_by: Optional[str] = None
     # dependencies: List[str]
-    job_number: int
+    job_number: Optional[int] = None
     id: str
     # started_at: Optional[datetime] = None
     name: str
