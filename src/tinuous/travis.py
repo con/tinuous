@@ -1,8 +1,11 @@
+from __future__ import annotations
+
+from collections.abc import Iterator
 from functools import cached_property
 import os
 from pathlib import Path
 import subprocess
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Optional
 from urllib.parse import quote
 
 from dateutil.parser import isoparse
@@ -18,7 +21,7 @@ class Travis(CISystem):
     gh_token: str
 
     @staticmethod
-    def get_auth_tokens() -> Dict[str, str]:
+    def get_auth_tokens() -> dict[str, str]:
         token = os.environ.get("TRAVIS_TOKEN")
         if not token:
             try:
@@ -59,7 +62,7 @@ class Travis(CISystem):
         return Github(self.gh_token).get_repo(self.repo)
 
     def paginate(
-        self, path: str, params: Optional[Dict[str, str]] = None
+        self, path: str, params: Optional[dict[str, str]] = None
     ) -> Iterator[dict]:
         while True:
             data = self.client.get(path, params=params).json()
@@ -71,8 +74,8 @@ class Travis(CISystem):
             params = None
 
     def get_build_assets(
-        self, event_types: List[EventType], logs: bool, artifacts: bool  # noqa: U100
-    ) -> Iterator["BuildAsset"]:
+        self, event_types: list[EventType], logs: bool, artifacts: bool  # noqa: U100
+    ) -> Iterator[BuildAsset]:
         if not logs:
             log.debug("No assets requested for Travis builds")
             return
@@ -115,7 +118,7 @@ class Travis(CISystem):
                 else:
                     log.info("Event type is %r; skipping", build["event_type"])
 
-    def get_commit(self, build: Dict[str, Any], event_type: EventType) -> Optional[str]:
+    def get_commit(self, build: dict[str, Any], event_type: EventType) -> Optional[str]:
         if event_type in (EventType.CRON, EventType.MANUAL, EventType.PUSH):
             commit = build["commit"]["sha"]
             assert isinstance(commit, str)
@@ -145,12 +148,12 @@ class TravisJobLog(BuildLog):
     def from_job(
         cls,
         client: APIClient,
-        build: Dict[str, Any],
-        job: Dict[str, Any],
+        build: dict[str, Any],
+        job: dict[str, Any],
         index: int,
         commit: Optional[str],
         event_type: EventType,
-    ) -> "TravisJobLog":
+    ) -> TravisJobLog:
         created_at = isoparse(build["started_at"])
         event_id: str
         if event_type in (EventType.CRON, EventType.MANUAL):
@@ -175,7 +178,7 @@ class TravisJobLog(BuildLog):
             index=index,
         )
 
-    def path_fields(self) -> Dict[str, Any]:
+    def path_fields(self) -> dict[str, Any]:
         fields = super().path_fields()
         fields.update(
             {
@@ -186,7 +189,7 @@ class TravisJobLog(BuildLog):
         )
         return fields
 
-    def download(self, path: Path) -> List[Path]:
+    def download(self, path: Path) -> list[Path]:
         if path.exists():
             log.info(
                 "Logs for job %s.%s already downloaded to %s; skipping",

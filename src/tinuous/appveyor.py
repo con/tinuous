@@ -1,8 +1,11 @@
+from __future__ import annotations
+
+from collections.abc import Iterator
 from functools import cached_property
 from hashlib import sha1
 import os
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Optional
 
 from dateutil.parser import isoparse
 
@@ -15,7 +18,7 @@ class Appveyor(CISystem):
     projectSlug: Optional[str]
 
     @staticmethod
-    def get_auth_tokens() -> Dict[str, str]:
+    def get_auth_tokens() -> dict[str, str]:
         token = os.environ.get("APPVEYOR_TOKEN")
         if not token:
             raise RuntimeError(
@@ -52,8 +55,8 @@ class Appveyor(CISystem):
                 break
 
     def get_build_assets(
-        self, event_types: List[EventType], logs: bool, artifacts: bool  # noqa: U100
-    ) -> Iterator["BuildAsset"]:
+        self, event_types: list[EventType], logs: bool, artifacts: bool  # noqa: U100
+    ) -> Iterator[BuildAsset]:
         if not logs:
             log.debug("No assets requested for Appveyor builds")
             return
@@ -98,10 +101,10 @@ class AppveyorJobLog(BuildLog):
     def from_job(
         cls,
         client: APIClient,
-        build: Dict[str, Any],
-        job: Dict[str, Any],
+        build: dict[str, Any],
+        job: dict[str, Any],
         index: int,
-    ) -> "AppveyorJobLog":
+    ) -> AppveyorJobLog:
         created_at = isoparse(build["created"])
         if build.get("pullRequestId"):
             event = EventType.PULL_REQUEST
@@ -125,7 +128,7 @@ class AppveyorJobLog(BuildLog):
             envvars=removeprefix(job["name"], "Environment: "),
         )
 
-    def path_fields(self) -> Dict[str, Any]:
+    def path_fields(self) -> dict[str, Any]:
         fields = super().path_fields()
         fields.update(
             {
@@ -138,7 +141,7 @@ class AppveyorJobLog(BuildLog):
         )
         return fields
 
-    def download(self, path: Path) -> List[Path]:
+    def download(self, path: Path) -> list[Path]:
         if path.exists():
             log.info(
                 "Logs for build %s, job %s already downloaded to %s; skipping",

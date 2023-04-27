@@ -1,8 +1,12 @@
+from __future__ import annotations
+
+from collections.abc import Callable, Iterator
 from datetime import datetime, timezone
 from functools import cached_property, wraps
 from pathlib import Path
+import sys
 from time import sleep
-from typing import Any, Callable, Dict, Iterator, List, Tuple
+from typing import TYPE_CHECKING, Any, Dict, TypeVar
 
 from github import Github
 from github.GitRelease import GitRelease
@@ -34,10 +38,22 @@ from .util import (
     sanitize_pathname,
 )
 
+if TYPE_CHECKING:
+    if sys.version_info >= (3, 10):
+        from typing import Concatenate, ParamSpec
+    else:
+        from typing_extensions import Concatenate, ParamSpec
 
-def retry_ratelimit(func: Callable) -> Callable:
+    P = ParamSpec("P")
+
+T = TypeVar("T")
+
+
+def retry_ratelimit(
+    func: Callable[Concatenate[GitHubActions, P], T]
+) -> Callable[Concatenate[GitHubActions, P], T]:
     @wraps(func)
-    def wrapped(gha: "GitHubActions", *args: Any, **kwargs: Any) -> Any:
+    def wrapped(gha: GitHubActions, *args: P.args, **kwargs: P.kwargs) -> T:
         while True:
             try:
                 return func(gha, *args, **kwargs)
@@ -56,7 +72,7 @@ class GitHubActions(CISystem):
     hash2pr: Dict[str, str] = Field(default_factory=dict)
 
     @staticmethod
-    def get_auth_tokens() -> Dict[str, str]:
+    def get_auth_tokens() -> dict[str, str]:
         return {"github": get_github_token()}
 
     @cached_property
@@ -88,16 +104,16 @@ class GitHubActions(CISystem):
         return self.client.get_repo(self.repo)
 
     @retry_ratelimit
-    def get_workflows(self) -> List[Workflow]:
-        workflows: List[Workflow] = []
+    def get_workflows(self) -> list[Workflow]:
+        workflows: list[Workflow] = []
         for wf in self.ghrepo.get_workflows():
             if self.workflow_spec.match(wf.path):
                 workflows.append(wf)
         return workflows
 
     @retry_ratelimit
-    def get_runs(self, wf: Workflow, since: datetime) -> List[WorkflowRun]:
-        runs: List[WorkflowRun] = []
+    def get_runs(self, wf: Workflow, since: datetime) -> list[WorkflowRun]:
+        runs: list[WorkflowRun] = []
         for r in wf.get_runs():
             if ensure_aware(r.created_at) <= since:
                 break
@@ -105,8 +121,8 @@ class GitHubActions(CISystem):
         return runs
 
     def get_build_assets(
-        self, event_types: List[EventType], logs: bool, artifacts: bool
-    ) -> Iterator["BuildAsset"]:
+        self, event_types: list[EventType], logs: bool, artifacts: bool
+    ) -> Iterator[BuildAsset]:
         if not logs and not artifacts:
             log.debug("No assets requested for GitHub Actions runs")
             return
@@ -196,7 +212,7 @@ class GitHubActions(CISystem):
         else:
             raise AssertionError(f"Unhandled EventType: {event_type!r}")
 
-    def get_artifacts(self, run: WorkflowRun) -> Iterator[Tuple[str, str]]:
+    def get_artifacts(self, run: WorkflowRun) -> Iterator[tuple[str, str]]:
         """Yields each artifact as a (name, download_url) pair"""
         url = run.artifacts_url
         while url is not None:
@@ -207,14 +223,14 @@ class GitHubActions(CISystem):
             url = r.links.get("next", {}).get("url")
 
     @retry_ratelimit
-    def get_releases(self) -> List[GitRelease]:
+    def get_releases(self) -> list[GitRelease]:
         return list(self.ghrepo.get_releases())
 
     @retry_ratelimit
-    def get_assets(self, rel: GitRelease) -> List[GitReleaseAsset]:
+    def get_assets(self, rel: GitRelease) -> list[GitReleaseAsset]:
         return list(rel.get_assets())
 
-    def get_release_assets(self) -> Iterator["GHReleaseAsset"]:
+    def get_release_assets(self) -> Iterator[GHReleaseAsset]:
         log.info("Fetching releases newer than %s", self.since)
         if self.until is not None:
             log.info("Skipping releases newer than %s", self.until)
@@ -259,7 +275,7 @@ class GHAAsset(BuildAsset):
     workflow_file: str
     run_id: int
 
-    def path_fields(self) -> Dict[str, Any]:
+    def path_fields(self) -> dict[str, Any]:
         fields = super().path_fields()
         fields.update(
             {
@@ -283,7 +299,7 @@ class GHABuildLog(GHAAsset, BuildLog):
         run: WorkflowRun,
         event_type: EventType,
         event_id: str,
-    ) -> "GHABuildLog":
+    ) -> GHABuildLog:
         return cls(
             client=client,
             logs_url=run.logs_url,
@@ -299,7 +315,7 @@ class GHABuildLog(GHAAsset, BuildLog):
             status=run.conclusion,
         )
 
-    def download(self, path: Path) -> List[Path]:
+    def download(self, path: Path) -> list[Path]:
         path.mkdir(parents=True, exist_ok=True)
         if any(path.iterdir()):
             log.info(
@@ -346,7 +362,7 @@ class GHAArtifact(GHAAsset, Artifact):
         event_id: str,
         name: str,
         download_url: str,
-    ) -> "GHAArtifact":
+    ) -> GHAArtifact:
         return cls(
             client=client,
             created_at=ensure_aware(run.created_at),
@@ -363,7 +379,7 @@ class GHAArtifact(GHAAsset, Artifact):
             download_url=download_url,
         )
 
-    def download(self, path: Path) -> List[Path]:
+    def download(self, path: Path) -> list[Path]:
         target_dir = path / self.name
         target_dir.mkdir(parents=True, exist_ok=True)
         if any(target_dir.iterdir()):
@@ -400,7 +416,7 @@ class GHReleaseAsset(BaseModel):
         # To allow APIClient:
         arbitrary_types_allowed = True
 
-    def path_fields(self) -> Dict[str, Any]:
+    def path_fields(self) -> dict[str, Any]:
         utc_date = self.published_at.astimezone(timezone.utc)
         return {
             "year": utc_date.strftime("%Y"),
@@ -416,10 +432,10 @@ class GHReleaseAsset(BaseModel):
             "commit": self.commit,
         }
 
-    def expand_path(self, path_template: str, variables: Dict[str, str]) -> str:
+    def expand_path(self, path_template: str, variables: dict[str, str]) -> str:
         return expand_template(path_template, self.path_fields(), variables)
 
-    def download(self, path: Path) -> List[Path]:
+    def download(self, path: Path) -> list[Path]:
         target = path / self.name
         if target.exists():
             log.info(

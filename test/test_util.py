@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 from pytest_mock import MockerFixture
@@ -98,7 +100,7 @@ def test_parse_slice(s: str, sl: slice) -> None:
     ],
 )
 def test_lazy_slicing_formatter_basics(
-    fmt: str, args: list, kwargs: Dict[str, Any], result: str
+    fmt: str, args: list, kwargs: dict[str, Any], result: str
 ) -> None:
     assert LazySlicingFormatter({}).format(fmt, *args, **kwargs) == result
 

@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from enum import Enum
 from functools import cached_property
@@ -9,7 +12,7 @@ import re
 from shutil import rmtree
 import tempfile
 from time import sleep
-from typing import Any, Dict, Iterator, List, Optional, Pattern, Tuple, Union
+from typing import Any, List, Optional, Pattern, Tuple
 from zipfile import BadZipFile, ZipFile
 
 from pydantic import BaseModel, Field, validator
@@ -72,7 +75,7 @@ class APIClient:
     MAX_RETRIES = 12
     ZIPFILE_RETRIES = 5
 
-    def __init__(self, base_url: str, headers: Dict[str, str], is_github: bool = False):
+    def __init__(self, base_url: str, headers: dict[str, str], is_github: bool = False):
         self.base_url = base_url
         self.session = requests.Session()
         self.session.headers.update(headers)
@@ -171,13 +174,13 @@ class CISystem(ABC, BaseModel):
 
     @staticmethod
     @abstractmethod
-    def get_auth_tokens() -> Dict[str, str]:
+    def get_auth_tokens() -> dict[str, str]:
         ...  # pragma: no cover
 
     @abstractmethod
     def get_build_assets(
-        self, event_types: List[EventType], logs: bool, artifacts: bool
-    ) -> Iterator["BuildAsset"]:
+        self, event_types: list[EventType], logs: bool, artifacts: bool
+    ) -> Iterator[BuildAsset]:
         ...  # pragma: no cover
 
     def register_build(self, ts: datetime, processed: bool) -> None:
@@ -212,7 +215,7 @@ class BuildAsset(ABC, BaseModel):
         # To allow APIClient:
         arbitrary_types_allowed = True
 
-    def path_fields(self) -> Dict[str, Any]:
+    def path_fields(self) -> dict[str, Any]:
         utc_date = self.created_at.astimezone(timezone.utc)
         commit = "UNK" if self.commit is None else self.commit
         return {
@@ -233,11 +236,11 @@ class BuildAsset(ABC, BaseModel):
             "common_status": COMMON_STATUS_MAP[self.status],
         }
 
-    def expand_path(self, path_template: str, variables: Dict[str, str]) -> str:
+    def expand_path(self, path_template: str, variables: dict[str, str]) -> str:
         return expand_template(path_template, self.path_fields(), variables)
 
     @abstractmethod
-    def download(self, path: Path) -> List[Path]:
+    def download(self, path: Path) -> list[Path]:
         ...  # pragma: no cover
 
 
@@ -268,8 +271,8 @@ class WorkflowSpec(NoExtraModel):
 
     @validator("include", "exclude", pre=True, each_item=True)
     def _maybe_regex(
-        cls, v: Union[str, Pattern], values: Dict[str, Any]  # noqa: B902, U100
-    ) -> Union[str, Pattern]:
+        cls, v: str | re.Pattern[str], values: dict[str, Any]  # noqa: B902, U100
+    ) -> str | re.Pattern[str]:
         if not values["regex"] and isinstance(v, str):
             v = r"\A" + re.escape(v) + r"\Z"
         return v

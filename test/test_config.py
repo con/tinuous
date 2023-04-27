@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import re
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -135,5 +137,5 @@ from tinuous.config import GHPathsDict, GitHubConfig
         ),
     ],
 )
-def test_parse_github_config(data: Dict[str, Any], cfg: GitHubConfig) -> None:
+def test_parse_github_config(data: dict[str, Any], cfg: GitHubConfig) -> None:
     assert GitHubConfig.parse_obj(data) == cfg
