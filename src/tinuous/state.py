@@ -16,6 +16,7 @@ class State(BaseModel):
     github: Optional[datetime] = None
     travis: Optional[datetime] = None
     appveyor: Optional[datetime] = None
+    circleci: Optional[datetime] = None
 
 
 class StateFile(BaseModel):

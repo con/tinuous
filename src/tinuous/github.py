@@ -26,7 +26,7 @@ from .base import (
     BuildLog,
     CISystem,
     EventType,
-    WorkflowSpec,
+    GHWorkflowSpec,
 )
 from .util import (
     delay_until,
@@ -68,7 +68,7 @@ def retry_ratelimit(
 
 
 class GitHubActions(CISystem):
-    workflow_spec: WorkflowSpec
+    workflow_spec: GHWorkflowSpec
     hash2pr: Dict[str, str] = Field(default_factory=dict)
 
     @staticmethod
