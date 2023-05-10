@@ -317,6 +317,8 @@ class TriggerType(Enum):
     EXPLICIT = "explicit"
     API = "api"
     WEBHOOK = "webhook"
+    # Seen in the wild; I have no idea what this is:
+    DECOUPLED_INGESTION_SYSTEM = "Decoupled Ingestion System"
 
     def as_event_type(self) -> EventType:
         if self is TriggerType.SCHEDULED:
@@ -331,6 +333,9 @@ class TriggerType(Enum):
             return EventType.MANUAL
         elif self is TriggerType.WEBHOOK:
             # CircleCI only runs jobs for pushes, not for PR creation
+            return EventType.PUSH
+        elif self is TriggerType.DECOUPLED_INGESTION_SYSTEM:
+            # Just a guess
             return EventType.PUSH
         else:
             raise AssertionError(f"Unexpected TriggerType {self!r}")
