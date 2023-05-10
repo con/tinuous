@@ -3,9 +3,8 @@ name: Codespell
 
 on:
   push:
-    branches: [cleanup]
+    branches: [master]
   pull_request:
-    branches: [cleanup]
 
 jobs:
   codespell:
