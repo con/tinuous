@@ -61,6 +61,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TRAVIS_TOKEN: ${{ secrets.TRAVIS_TOKEN }}
           APPVEYOR_TOKEN: ${{ secrets.APPVEYOR_TOKEN }}
+          CIRCLECI_CLI_TOKEN: ${{ secrets.CIRCLECI_CLI_TOKEN }}
 
       - name: Coverage report
         run: |
