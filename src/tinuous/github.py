@@ -4,7 +4,9 @@ from collections.abc import Iterator
 from datetime import datetime, timezone
 from functools import cached_property
 from pathlib import Path
+import re
 from typing import Any, Dict, Optional
+from urllib.parse import quote
 
 from pydantic import BaseModel, Field
 import requests
@@ -69,6 +71,24 @@ class GitHubActions(CISystem):
                 break
             yield r
 
+    def get_runs_for_head(self, wf: Workflow, head_sha: str) -> Iterator[WorkflowRun]:
+        for item in self.paginate(
+            f"/repos/{self.repo}/actions/workflows/{wf.id}/runs",
+            params={"head_sha": head_sha},
+        ):
+            yield WorkflowRun.parse_obj(item)
+
+    def expand_committish(self, committish: str) -> str:
+        try:
+            r = self.client.get(
+                f"/repos/{self.repo}/commits/{quote(committish)}",
+                headers={"Accept": "application/vnd.github.sha"},
+            )
+        except requests.HTTPError:
+            raise ValueError(f"Failed to expand committish {committish}")
+        else:
+            return r.text.strip()
+
     def get_build_assets(
         self, event_types: list[EventType], logs: bool, artifacts: bool
     ) -> Iterator[BuildAsset]:
@@ -110,6 +130,45 @@ class GitHubActions(CISystem):
                                 )
                     else:
                         log.info("Event type is %r; skipping", run.event)
+
+    def get_build_assets_for_commit(
+        self, committish: str, event_types: list[EventType], logs: bool, artifacts: bool
+    ) -> Iterator[BuildAsset]:
+        if not logs and not artifacts:
+            log.debug("No assets requested for GitHub Actions runs")
+            return
+        if not re.fullmatch(r"[0-9A-Fa-f]{40}", committish):
+            committish2 = self.expand_committish(committish)
+            log.info("Expanded committish %r to full sha %s", committish, committish2)
+            committish = committish2
+        log.info("Fetching runs for commit %s", committish)
+        for wf in self.get_workflows():
+            log.info("Fetching runs for workflow %s (%s)", wf.path, wf.name)
+            for run in self.get_runs_for_head(wf, committish):
+                if run.status != "completed":
+                    log.info("Run %s not completed; skipping", run.run_number)
+                    continue
+                log.info("Found run %s", run.run_number)
+                run_event = EventType.from_gh_event(run.event)
+                if run_event in event_types:
+                    event_id = self.get_event_id(run, run_event)
+                    if logs:
+                        yield GHABuildLog.from_workflow_run(
+                            self.client, wf, run, run_event, event_id
+                        )
+                    if artifacts:
+                        for name, download_url in self.get_artifacts(run):
+                            yield GHAArtifact.from_workflow_run(
+                                self.client,
+                                wf,
+                                run,
+                                run_event,
+                                event_id,
+                                name,
+                                download_url,
+                            )
+                else:
+                    log.info("Event type is %r; skipping", run.event)
 
     def get_event_id(self, run: WorkflowRun, event_type: EventType) -> str:
         if event_type in (EventType.CRON, EventType.MANUAL):
