@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from functools import cached_property
 from pathlib import Path
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
 from pydantic import BaseModel, Field
@@ -475,7 +475,7 @@ class WorkflowRun(BaseModel):
     status: Optional[str]
     conclusion: Optional[str]
     workflow_id: int
-    pull_requests: list[PullRequest]
+    pull_requests: List[PullRequest]
     created_at: datetime
     updated_at: datetime
     logs_url: str
@@ -495,4 +495,4 @@ class Release(BaseModel):
     prerelease: bool
     created_at: datetime
     published_at: Optional[datetime]
-    assets: list[ReleaseAsset]
+    assets: List[ReleaseAsset]

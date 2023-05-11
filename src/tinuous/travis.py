@@ -5,7 +5,7 @@ from functools import cached_property
 import os
 from pathlib import Path
 import subprocess
-from typing import Any, Optional
+from typing import Any, List, Optional
 from urllib.parse import quote
 
 from dateutil.parser import isoparse
@@ -227,4 +227,4 @@ class ParentCommit(BaseModel):
 
 
 class Commit(BaseModel):
-    parents: list[ParentCommit]
+    parents: List[ParentCommit]
