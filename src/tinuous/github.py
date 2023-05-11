@@ -1,23 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from datetime import datetime, timezone
-from functools import cached_property, wraps
+from functools import cached_property
 from pathlib import Path
-import sys
-from time import sleep
-from typing import TYPE_CHECKING, Any, Dict, TypeVar
+from typing import Any, Dict, Optional
 
-from github import Github
-from github.GitRelease import GitRelease
-from github.GitReleaseAsset import GitReleaseAsset
-from github.GithubException import RateLimitExceededException
-from github.Repository import Repository
-from github.Workflow import Workflow
-from github.WorkflowRun import WorkflowRun
 from pydantic import BaseModel, Field
 import requests
-from urllib3.util.retry import Retry
 
 from .base import (
     APIClient,
@@ -28,43 +18,7 @@ from .base import (
     EventType,
     GHWorkflowSpec,
 )
-from .util import (
-    delay_until,
-    ensure_aware,
-    expand_template,
-    get_github_token,
-    iterfiles,
-    log,
-    sanitize_pathname,
-)
-
-if TYPE_CHECKING:
-    if sys.version_info >= (3, 10):
-        from typing import Concatenate, ParamSpec
-    else:
-        from typing_extensions import Concatenate, ParamSpec
-
-    P = ParamSpec("P")
-
-T = TypeVar("T")
-
-
-def retry_ratelimit(
-    func: Callable[Concatenate[GitHubActions, P], T]
-) -> Callable[Concatenate[GitHubActions, P], T]:
-    @wraps(func)
-    def wrapped(gha: GitHubActions, *args: P.args, **kwargs: P.kwargs) -> T:
-        while True:
-            try:
-                return func(gha, *args, **kwargs)
-            except RateLimitExceededException:
-                delay = delay_until(
-                    ensure_aware(gha.client.get_rate_limit().core.reset)
-                )
-                log.warning("Rate limit exceeded; sleeping for %s seconds", delay)
-                sleep(delay)
-
-    return wrapped
+from .util import expand_template, get_github_token, iterfiles, log, sanitize_pathname
 
 
 class GitHubActions(CISystem):
@@ -76,49 +30,44 @@ class GitHubActions(CISystem):
         return {"github": get_github_token()}
 
     @cached_property
-    def client(self) -> Github:
-        return Github(
-            self.token,
-            retry=Retry(
-                total=12,
-                backoff_factor=1.25,
-                status_forcelist=[500, 502, 503, 504],
-            ),
-        )
-
-    @cached_property
-    def extra_client(self) -> APIClient:
-        """
-        Client for downloading resources and other actions not supported by
-        Pygithub
-        """
+    def client(self) -> APIClient:
         return APIClient(
             "https://api.github.com",
             {"Authorization": f"token {self.token}"},
             is_github=True,
         )
 
-    @cached_property  # type: ignore[misc]
-    @retry_ratelimit
-    def ghrepo(self) -> Repository:
-        return self.client.get_repo(self.repo)
+    def paginate(
+        self, path: str, params: Optional[dict[str, str]] = None
+    ) -> Iterator[dict]:
+        while path is not None:
+            r = self.client.get(path, params=params)
+            data = r.json()
+            if isinstance(data, list):
+                yield from data
+            else:
+                assert isinstance(data, dict)
+                itemses = [v for k, v in data.items() if k != "total_count"]
+                if len(itemses) != 1:
+                    raise ValueError(
+                        f"Unique non-count key not found in {path} response"
+                    )
+                yield from itemses[0]
+            path = r.links.get("next", {}).get("url")
+            params = None
 
-    @retry_ratelimit
-    def get_workflows(self) -> list[Workflow]:
-        workflows: list[Workflow] = []
-        for wf in self.ghrepo.get_workflows():
+    def get_workflows(self) -> Iterator[Workflow]:
+        for item in self.paginate(f"/repos/{self.repo}/actions/workflows"):
+            wf = Workflow.parse_obj(item)
             if self.workflow_spec.match(wf.path):
-                workflows.append(wf)
-        return workflows
+                yield wf
 
-    @retry_ratelimit
-    def get_runs(self, wf: Workflow, since: datetime) -> list[WorkflowRun]:
-        runs: list[WorkflowRun] = []
-        for r in wf.get_runs():
-            if ensure_aware(r.created_at) <= since:
+    def get_runs(self, wf: Workflow, since: datetime) -> Iterator[WorkflowRun]:
+        for item in self.paginate(f"/repos/{self.repo}/actions/workflows/{wf.id}/runs"):
+            r = WorkflowRun.parse_obj(item)
+            if r.created_at <= since:
                 break
-            runs.append(r)
-        return runs
+            yield r
 
     def get_build_assets(
         self, event_types: list[EventType], logs: bool, artifacts: bool
@@ -133,7 +82,7 @@ class GitHubActions(CISystem):
             log.info("Fetching runs for workflow %s (%s)", wf.path, wf.name)
             for run in self.get_runs(wf, self.since):
                 run_event = EventType.from_gh_event(run.event)
-                ts = ensure_aware(run.created_at)
+                ts = run.created_at
                 if self.until is not None and ts > self.until:
                     log.info("Run %s is too new; skipping", run.run_number)
                 elif run.status != "completed":
@@ -146,12 +95,12 @@ class GitHubActions(CISystem):
                         event_id = self.get_event_id(run, run_event)
                         if logs:
                             yield GHABuildLog.from_workflow_run(
-                                self.extra_client, wf, run, run_event, event_id
+                                self.client, wf, run, run_event, event_id
                             )
                         if artifacts:
                             for name, download_url in self.get_artifacts(run):
                                 yield GHAArtifact.from_workflow_run(
-                                    self.extra_client,
+                                    self.client,
                                     wf,
                                     run,
                                     run_event,
@@ -164,8 +113,9 @@ class GitHubActions(CISystem):
 
     def get_event_id(self, run: WorkflowRun, event_type: EventType) -> str:
         if event_type in (EventType.CRON, EventType.MANUAL):
-            return ensure_aware(run.created_at).strftime("%Y%m%dT%H%M%S")
+            return run.created_at.strftime("%Y%m%dT%H%M%S")
         elif event_type is EventType.PUSH:
+            assert run.head_branch is not None
             return run.head_branch
         elif event_type is EventType.PULL_REQUEST:
             if run.pull_requests:
@@ -173,7 +123,7 @@ class GitHubActions(CISystem):
             elif run.head_sha in self.hash2pr:
                 return self.hash2pr[run.head_sha]
             else:
-                r = self.extra_client.get(
+                r = self.client.get(
                     f"/repos/{self.repo}/commits/{run.head_sha}/pulls",
                     headers={"Accept": "application/vnd.github.groot-preview+json"},
                 )
@@ -184,29 +134,20 @@ class GitHubActions(CISystem):
                     # have to fall back to performing an issue search to fill
                     # those in.  This should hopefully be used sparingly, as
                     # there's a 30 searches per hour rate limit.
-                    while True:
-                        try:
-                            pr = str(
-                                self.client.search_issues(
-                                    f"repo:{run.repository.full_name} is:pr"
-                                    f" {run.head_sha}",
-                                    sort="created",
-                                    order="asc",
-                                )[0].number
-                            )
-                            break
-                        except IndexError:
-                            pr = "UNK"
-                            break
-                        except RateLimitExceededException:
-                            delay = delay_until(
-                                ensure_aware(self.client.get_rate_limit().search.reset)
-                            )
-                            log.warning(
-                                "Search rate limit exceeded; sleeping for %s seconds",
-                                delay,
-                            )
-                            sleep(delay)
+                    if hits := self.client.get(
+                        "/search/issues",
+                        params={
+                            "q": (
+                                f"repo:{run.repository.full_name} is:pr"
+                                f" {run.head_sha}"
+                            ),
+                            "sort": "created",
+                            "order": "asc",
+                        },
+                    ).json()["items"]:
+                        pr = str(hits[0]["number"])
+                    else:
+                        pr = "UNK"
                 self.hash2pr[run.head_sha] = pr
                 return pr
         else:
@@ -214,21 +155,13 @@ class GitHubActions(CISystem):
 
     def get_artifacts(self, run: WorkflowRun) -> Iterator[tuple[str, str]]:
         """Yields each artifact as a (name, download_url) pair"""
-        url = run.artifacts_url
-        while url is not None:
-            r = self.extra_client.get(url)
-            for artifact in r.json()["artifacts"]:
-                if not artifact["expired"]:
-                    yield (artifact["name"], artifact["archive_download_url"])
-            url = r.links.get("next", {}).get("url")
+        for artifact in self.paginate(run.artifacts_url):
+            if not artifact["expired"]:
+                yield (artifact["name"], artifact["archive_download_url"])
 
-    @retry_ratelimit
-    def get_releases(self) -> list[GitRelease]:
-        return list(self.ghrepo.get_releases())
-
-    @retry_ratelimit
-    def get_assets(self, rel: GitRelease) -> list[GitReleaseAsset]:
-        return list(rel.get_assets())
+    def get_releases(self) -> Iterator[Release]:
+        for item in self.paginate(f"/repos/{self.repo}/releases"):
+            yield Release.parse_obj(item)
 
     def get_release_assets(self) -> Iterator[GHReleaseAsset]:
         log.info("Fetching releases newer than %s", self.since)
@@ -241,27 +174,26 @@ class GitHubActions(CISystem):
             if rel.prerelease:
                 log.info("Release %s is prerelease; skipping", rel.tag_name)
                 continue
-            ts = ensure_aware(rel.published_at)
+            ts = rel.published_at
+            assert ts is not None
             if ts <= self.since or (self.until is not None and ts > self.until):
                 continue
             self.register_build(ts, True)  # TODO: Set to False for drafts?
             log.info("Found release %s", rel.tag_name)
-            r = self.extra_client.get(
-                f"/repos/{self.repo}/git/refs/tags/{rel.tag_name}"
-            )
+            r = self.client.get(f"/repos/{self.repo}/git/refs/tags/{rel.tag_name}")
             tagobj = r.json()["object"]
             if tagobj["type"] == "commit":
                 commit = tagobj["sha"]
             elif tagobj["type"] == "tag":
-                r = self.extra_client.get(tagobj["url"])
+                r = self.client.get(tagobj["url"])
                 commit = r.json()["object"]["sha"]
             else:
                 raise RuntimeError(
                     f"Unexpected type for tag {rel.tag_name}: {tagobj['type']!r}"
                 )
-            for asset in self.get_assets(rel):
+            for asset in rel.assets:
                 yield GHReleaseAsset(
-                    client=self.extra_client,
+                    client=self.client,
                     published_at=ts,
                     tag_name=rel.tag_name,
                     commit=commit,
@@ -303,7 +235,7 @@ class GHABuildLog(GHAAsset, BuildLog):
         return cls(
             client=client,
             logs_url=run.logs_url,
-            created_at=ensure_aware(run.created_at),
+            created_at=run.created_at,
             event_type=event_type,
             event_id=event_id,
             build_commit=run.head_sha,
@@ -365,7 +297,7 @@ class GHAArtifact(GHAAsset, Artifact):
     ) -> GHAArtifact:
         return cls(
             client=client,
-            created_at=ensure_aware(run.created_at),
+            created_at=run.created_at,
             event_type=event_type,
             event_id=event_id,
             build_commit=run.head_sha,
@@ -454,3 +386,54 @@ class GHReleaseAsset(BaseModel):
         )
         self.client.download(self.download_url, target)
         return [target]
+
+
+class Workflow(BaseModel):
+    id: int
+    name: str
+    path: str
+    state: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class PullRequest(BaseModel):
+    number: int
+
+
+class Repository(BaseModel):
+    full_name: str
+
+
+class WorkflowRun(BaseModel):
+    id: int
+    name: Optional[str]
+    head_branch: Optional[str]
+    head_sha: str
+    run_number: int
+    run_attempt: Optional[int] = None
+    event: str
+    status: Optional[str]
+    conclusion: Optional[str]
+    workflow_id: int
+    pull_requests: list[PullRequest]
+    created_at: datetime
+    updated_at: datetime
+    logs_url: str
+    artifacts_url: str
+    workflow_url: str
+    repository: Repository
+
+
+class ReleaseAsset(BaseModel):
+    browser_download_url: str
+    name: str
+
+
+class Release(BaseModel):
+    tag_name: str
+    draft: bool
+    prerelease: bool
+    created_at: datetime
+    published_at: Optional[datetime]
+    assets: list[ReleaseAsset]
