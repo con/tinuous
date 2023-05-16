@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import logging
 import os
 from pathlib import Path
@@ -164,6 +165,80 @@ def fetch(config_file: str, state_path: Optional[str], sanitize_secrets: bool) -
         elif statefile.modified:
             msg = f"[tinuous] Updated statefile\n\nProduced by tinuous {__version__}"
             ds.save(recursive=True, message=msg)
+
+
+@main.command()
+@click.option(
+    "--sanitize-secrets",
+    is_flag=True,
+    help="Sanitize strings matching secret patterns",
+)
+@click.argument("committish")
+@click.pass_obj
+def fetch_commit(config_file: str, committish: str, sanitize_secrets: bool) -> None:
+    """Download logs for a specific commit"""
+    try:
+        with open(config_file) as fp:
+            cfg = Config.parse_obj(safe_load(fp))
+    except FileNotFoundError:
+        raise click.UsageError(f"Configuration file not found: {config_file}")
+    if sanitize_secrets and not cfg.secrets:
+        log.warning("--sanitize-secrets set but no secrets given in configuration")
+    ghcfg = cfg.ci.github
+    if ghcfg is None:
+        raise click.UsageError(
+            "fetch-commit is only supported for GitHub, but GitHub is not configured"
+        )
+    tokens = ghcfg.get_auth_tokens()
+    if cfg.datalad.enabled:
+        try:
+            from datalad.api import Dataset
+        except ImportError:
+            raise click.UsageError("datalad.enabled set, but datalad is not installed")
+        ds = Dataset(os.curdir)
+        if not ds.is_installed():
+            ds.create(force=True, cfg_proc=cfg.datalad.cfg_proc)
+    logs_added = 0
+    artifacts_added = 0
+    if not ghcfg.gets_builds():
+        raise click.UsageError("No paths configured for github")
+    log.info("Fetching resources from github")
+    ci = ghcfg.get_system(
+        repo=cfg.repo, since=datetime.now(timezone.utc), until=None, tokens=tokens
+    )
+    artifacts_path = ghcfg.paths.artifacts
+    for obj in ci.get_build_assets_for_commit(
+        committish,
+        cfg.types,
+        logs=ghcfg.paths.logs is not None,
+        artifacts=artifacts_path is not None,
+    ):
+        if isinstance(obj, BuildLog):
+            assert ghcfg.paths.logs is not None
+            path = obj.expand_path(ghcfg.paths.logs, cfg.vars)
+        elif isinstance(obj, Artifact):
+            assert artifacts_path is not None
+            path = obj.expand_path(artifacts_path, cfg.vars)
+        else:
+            raise AssertionError(f"Unexpected asset type {type(obj).__name__}")
+        if cfg.datalad.enabled:
+            ensure_datalad(ds, path, cfg.datalad.cfg_proc)
+        paths = obj.download(Path(path))
+        if isinstance(obj, BuildLog):
+            logs_added += len(paths)
+            if sanitize_secrets and cfg.secrets:
+                for p in paths:
+                    sanitize(p, cfg.secrets, cfg.allow_secrets_regex)
+        elif isinstance(obj, Artifact):
+            artifacts_added += len(paths)
+    log.info("%d logs downloaded", logs_added)
+    log.info("%d artifacts downloaded", artifacts_added)
+    if cfg.datalad.enabled and (logs_added or artifacts_added):
+        msg = f"[tinuous] {logs_added} logs added"
+        if artifacts_added:
+            msg += f", {artifacts_added} artifacts added"
+        msg += f"\n\nProduced by tinuous {__version__}"
+        ds.save(recursive=True, message=msg)
 
 
 @main.command("sanitize")

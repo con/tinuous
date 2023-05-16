@@ -112,6 +112,24 @@ Options
                                 in the given file [default value:
                                 ``.tinuous.state.json``]
 
+``fetch-commit`` Command
+------------------------
+
+::
+
+    tinuous [<global options>] fetch-commit [<options>] <committish>
+
+Download logs and build artifacts for just the given committish.   The
+statefile is not updated.
+
+This command only supports retrieving resources from GitHub.
+
+Options
+~~~~~~~
+
+--sanitize-secrets              Sanitize secrets from log files after
+                                downloading
+
 ``sanitize`` Command
 --------------------
 
