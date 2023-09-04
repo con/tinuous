@@ -15,7 +15,7 @@ jobs:
           - datalad
     steps:
       - name: Check out repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -37,7 +37,7 @@ jobs:
           datalad-installer --sudo ok neurodebian git-annex -m neurodebian
 
       - name: Checkout con/tinuous-inception
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: con/tinuous-inception
           path: tinuous-inception
