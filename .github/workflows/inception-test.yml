@@ -3,6 +3,8 @@ name: Test fetching tinuous' logs
 on:
   pull_request:
   push:
+    branches:
+      - master
 
 jobs:
   test:
