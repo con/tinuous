@@ -51,7 +51,7 @@ class CIConfig(NoExtraModel, ABC):
     @staticmethod
     @abstractmethod
     def get_auth_tokens() -> dict[str, str]:
-        ...  # pragma: no cover
+        ...
 
     @abstractmethod
     def get_system(
@@ -61,7 +61,7 @@ class CIConfig(NoExtraModel, ABC):
         until: Optional[datetime],
         tokens: dict[str, str],
     ) -> CISystem:
-        ...  # pragma: no cover
+        ...
 
     def gets_builds(self) -> bool:
         return self.paths.gets_builds()
