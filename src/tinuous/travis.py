@@ -73,7 +73,7 @@ class Travis(CISystem):
             else:
                 raise e
         else:
-            return Commit.parse_obj(r.json())
+            return Commit.model_validate(r.json())
 
     def paginate(
         self, path: str, params: Optional[dict[str, str]] = None

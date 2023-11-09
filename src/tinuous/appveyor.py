@@ -15,7 +15,7 @@ from .util import log, removeprefix, sanitize_pathname
 
 class Appveyor(CISystem):
     accountName: str
-    projectSlug: Optional[str]
+    projectSlug: Optional[str] = None
 
     @staticmethod
     def get_auth_tokens() -> dict[str, str]:

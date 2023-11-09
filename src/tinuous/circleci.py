@@ -65,24 +65,24 @@ class CircleCI(CISystem):
 
     def get_pipelines(self) -> Iterator[Pipeline]:
         for item in self.paginate(f"/v2/project/gh/{self.repo}/pipeline"):
-            yield Pipeline.parse_obj(item)
+            yield Pipeline.model_validate(item)
 
     def get_workflows(self, pipeline_id: str) -> Iterator[Workflow]:
         for item in self.paginate(f"/v2/pipeline/{pipeline_id}/workflow"):
-            wf = Workflow.parse_obj(item)
+            wf = Workflow.model_validate(item)
             if self.workflow_spec.match(wf.name):
                 yield wf
 
     def get_jobs(self, workflow_id: str) -> Iterator[Job]:
         for item in self.paginate(f"/v2/workflow/{workflow_id}/job"):
-            yield Job.parse_obj(item)
+            yield Job.model_validate(item)
 
     def get_artifacts(self, job_number: int) -> Iterator[Artifact]:
         for item in self.paginate(f"/v2/project/gh/{self.repo}/{job_number}/artifacts"):
-            yield Artifact.parse_obj(item)
+            yield Artifact.model_validate(item)
 
     def get_jobv1(self, job_number: int) -> Jobv1:
-        return Jobv1.parse_obj(
+        return Jobv1.model_validate(
             self.client.get(f"/v1.1/project/gh/{self.repo}/{job_number}").json()
         )
 

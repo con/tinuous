@@ -4,18 +4,18 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from enum import Enum
-from functools import cached_property
 import heapq
 import os
 from pathlib import Path, PurePosixPath
 import re
 from shutil import rmtree
+import sys
 import tempfile
 from time import sleep
-from typing import Any, List, Optional, Pattern, Tuple
+from typing import Any, List, Optional, Tuple
 from zipfile import BadZipFile, ZipFile
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, BeforeValidator, Field, ValidationInfo
 import requests
 from requests.exceptions import ChunkedEncodingError
 from requests.exceptions import ConnectionError as ReqConError
@@ -27,6 +27,11 @@ from .util import (
     parse_retry_after,
     sanitize_pathname,
 )
+
+if sys.version_info >= (3, 9):
+    from typing import Annotated
+else:
+    from typing_extensions import Annotated
 
 
 class CommonStatus(Enum):
@@ -201,7 +206,7 @@ class CISystem(ABC, BaseModel):
     repo: str
     token: str
     since: datetime
-    until: Optional[datetime]
+    until: Optional[datetime] = None
     fetched: List[Tuple[datetime, bool]] = Field(default_factory=list)
 
     @staticmethod
@@ -227,25 +232,17 @@ class CISystem(ABC, BaseModel):
             prev_ts = ts
         return prev_ts
 
-    class Config:
-        # <https://github.com/samuelcolvin/pydantic/issues/1241>
-        arbitrary_types_allowed = True
-        keep_untouched = (cached_property,)
 
-
-class BuildAsset(ABC, BaseModel):
+# The `arbitrary_types_allowed` is for APIClient
+class BuildAsset(ABC, BaseModel, arbitrary_types_allowed=True):
     client: APIClient
     created_at: datetime
     event_type: EventType
     event_id: str
     build_commit: str
-    commit: Optional[str]
+    commit: Optional[str] = None
     number: int
     status: str
-
-    class Config:
-        # To allow APIClient:
-        arbitrary_types_allowed = True
 
     def path_fields(self) -> dict[str, Any]:
         utc_date = self.created_at.astimezone(timezone.utc)
@@ -288,26 +285,25 @@ class Artifact(BuildAsset):
 # import issue:
 
 
-class NoExtraModel(BaseModel):
-    class Config:
-        allow_population_by_field_name = True
-        extra = "forbid"
+class NoExtraModel(BaseModel, populate_by_name=True, extra="forbid"):
+    pass
+
+
+def literalize_str(v: Any, info: ValidationInfo) -> Any:
+    if isinstance(v, str) and not info.data.get("regex"):
+        v = r"\A" + re.escape(v) + r"\Z"
+    return v
+
+
+StrOrRegex = Annotated[re.Pattern, BeforeValidator(literalize_str)]
 
 
 class WorkflowSpec(NoExtraModel):
     regex: bool = False
     # Workflow names are stored as compiled regexes regardless of whether
     # `regex` is true in order to keep type-checking simple.
-    include: List[Pattern] = Field(default_factory=lambda: [re.compile(".*")])
-    exclude: List[Pattern] = Field(default_factory=list)
-
-    @validator("include", "exclude", pre=True, each_item=True)
-    def _maybe_regex(
-        cls, v: str | re.Pattern[str], values: dict[str, Any]  # noqa: B902, U100
-    ) -> str | re.Pattern[str]:
-        if not values["regex"] and isinstance(v, str):
-            v = r"\A" + re.escape(v) + r"\Z"
-        return v
+    include: List[StrOrRegex] = Field(default_factory=lambda: [re.compile(".*")])
+    exclude: List[StrOrRegex] = Field(default_factory=list)
 
     def match(self, wf_name: str) -> bool:
         return any(r.search(wf_name) for r in self.include) and not any(

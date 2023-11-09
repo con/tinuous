@@ -83,7 +83,7 @@ def fetch(config_file: str, state_path: Optional[str], sanitize_secrets: bool) -
     """Download logs"""
     try:
         with open(config_file) as fp:
-            cfg = Config.parse_obj(safe_load(fp))
+            cfg = Config.model_validate(safe_load(fp))
     except FileNotFoundError:
         raise click.UsageError(f"Configuration file not found: {config_file}")
     if sanitize_secrets and not cfg.secrets:
@@ -179,7 +179,7 @@ def fetch_commit(config_file: str, committish: str, sanitize_secrets: bool) -> N
     """Download logs for a specific commit"""
     try:
         with open(config_file) as fp:
-            cfg = Config.parse_obj(safe_load(fp))
+            cfg = Config.model_validate(safe_load(fp))
     except FileNotFoundError:
         raise click.UsageError(f"Configuration file not found: {config_file}")
     if sanitize_secrets and not cfg.secrets:
@@ -250,7 +250,7 @@ def sanitize_cmd(config_file: str, path: list[str]) -> None:
     """Sanitize secrets in logs"""
     try:
         with open(config_file) as fp:
-            cfg = Config.parse_obj(safe_load(fp))
+            cfg = Config.model_validate(safe_load(fp))
     except FileNotFoundError:
         raise click.UsageError(f"Configuration file not found: {config_file}")
     for p in path:

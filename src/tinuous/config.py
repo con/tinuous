@@ -6,8 +6,7 @@ from datetime import datetime, timedelta, timezone
 import re
 from typing import Any, Dict, List, Optional, Pattern
 
-from pydantic import Field, validator
-from pydantic.fields import ModelField
+from pydantic import Field, field_validator
 
 from .appveyor import Appveyor
 from .base import CISystem, EventType, GHWorkflowSpec, NoExtraModel, WorkflowSpec
@@ -32,7 +31,8 @@ class GHPathsDict(PathsDict):
     releases: Optional[str] = None
 
     def gets_builds(self) -> bool:
-        return self.logs is not None or self.artifacts is not None
+        # <https://github.com/pydantic/pydantic/issues/8052>
+        return self.logs is not None or self.artifacts is not None  # type: ignore[unreachable]
 
     def gets_releases(self) -> bool:
         return self.releases is not None
@@ -42,7 +42,8 @@ class CCIPathsDict(PathsDict):
     artifacts: Optional[str] = None
 
     def gets_builds(self) -> bool:
-        return self.logs is not None or self.artifacts is not None
+        # <https://github.com/pydantic/pydantic/issues/8052>
+        return self.logs is not None or self.artifacts is not None  # type: ignore[unreachable]
 
 
 class CIConfig(NoExtraModel, ABC):
@@ -74,8 +75,9 @@ class GitHubConfig(CIConfig):
     paths: GHPathsDict = Field(default_factory=GHPathsDict)
     workflows: GHWorkflowSpec = Field(default_factory=GHWorkflowSpec)
 
-    @validator("workflows", pre=True)
-    def _workflow_list(cls, v: Any) -> Any:  # noqa: B902, U100
+    @field_validator("workflows", mode="before")
+    @classmethod
+    def _workflow_list(cls, v: Any) -> Any:
         if isinstance(v, list):
             return {"include": v}
         else:
@@ -205,18 +207,18 @@ class Config(NoExtraModel):
     allow_secrets_regex: Optional[Pattern] = Field(None, alias="allow-secrets-regex")
     datalad: DataladConfig = Field(default_factory=DataladConfig)
 
-    @validator("repo")
-    def _validate_repo(cls, v: str) -> str:  # noqa: B902, U100
+    @field_validator("repo")
+    @classmethod
+    def _validate_repo(cls, v: str) -> str:
         if not re.fullmatch(r"[^/]+/[^/]+", v):
             raise ValueError("Repo must be in the form 'OWNER/NAME'")
         return v
 
-    @validator("since", "until")
-    def _validate_datetimes(
-        cls, v: Optional[datetime], field: ModelField  # noqa: B902, U100
-    ) -> Optional[datetime]:
+    @field_validator("since", "until")
+    @classmethod
+    def _validate_datetimes(cls, v: Optional[datetime]) -> Optional[datetime]:
         if v is not None and v.tzinfo is None:
-            raise ValueError(f"{field.name!r} timestamp must include timezone offset")
+            raise ValueError("timestamps must include timezone offset")
         return v
 
     def get_since(self, state_since: Optional[datetime]) -> datetime:
