@@ -28,36 +28,41 @@ from .util import (
     sanitize_pathname,
 )
 
+
+class CommonStatus(Enum):
+    SUCCESS = "success"
+    FAILED = "failed"
+    ERRORED = "errored"
+    INCOMPLETE = "incomplete"
+
+
 COMMON_STATUS_MAP = {
-    "success": "success",
-    "passed": "success",
-    "failure": "failed",
-    "failed": "failed",
-    "errored": "errored",
-    "timed_out": "errored",
-    "startup_failure": "errored",
-    "neutral": "incomplete",
-    "action_required": "incomplete",
-    "cancelled": "incomplete",
-    "canceled": "incomplete",
-    "skipped": "incomplete",
-    "stale": "incomplete",
-    "started": "incomplete",
+    "success": CommonStatus.SUCCESS,
+    "passed": CommonStatus.SUCCESS,
+    "failure": CommonStatus.FAILED,
+    "failed": CommonStatus.FAILED,
+    "errored": CommonStatus.ERRORED,
+    "timed_out": CommonStatus.ERRORED,
+    "startup_failure": CommonStatus.ERRORED,
+    "neutral": CommonStatus.INCOMPLETE,
+    "action_required": CommonStatus.INCOMPLETE,
+    "cancelled": CommonStatus.INCOMPLETE,
+    "canceled": CommonStatus.INCOMPLETE,
+    "skipped": CommonStatus.INCOMPLETE,
+    "stale": CommonStatus.INCOMPLETE,
+    "started": CommonStatus.INCOMPLETE,
     # Statuses specific to CircleCI:
-    "retried": "incomplete",
-    "infrastructure_fail": "errored",
-    "timedout": "errored",
-    "not_run": "incomplete",
-    "running": "incomplete",
-    "queued": "incomplete",
-    "not_running": "incomplete",
-    "no_tests": "success",
-    "fixed": "success",
+    "retried": CommonStatus.INCOMPLETE,
+    "infrastructure_fail": CommonStatus.ERRORED,
+    "timedout": CommonStatus.ERRORED,
+    "not_run": CommonStatus.INCOMPLETE,
+    "running": CommonStatus.INCOMPLETE,
+    "queued": CommonStatus.INCOMPLETE,
+    "not_running": CommonStatus.INCOMPLETE,
+    "no_tests": CommonStatus.SUCCESS,
+    "fixed": CommonStatus.SUCCESS,
     # Error on unknown so we're forced to categorize them.
 }
-
-# Safeguard against typos:
-assert set(COMMON_STATUS_MAP.values()) == {"success", "failed", "errored", "incomplete"}
 
 
 class EventType(Enum):
@@ -260,7 +265,7 @@ class BuildAsset(ABC, BaseModel):
             "commit": commit,
             "number": str(self.number),
             "status": self.status,
-            "common_status": COMMON_STATUS_MAP[self.status],
+            "common_status": COMMON_STATUS_MAP[self.status].value,
         }
 
     def expand_path(self, path_template: str, variables: dict[str, str]) -> str:
