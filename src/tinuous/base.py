@@ -194,7 +194,7 @@ class APIClient:
         zippath = Path(fpath)
         i = 0
         while True:
-            self.download(path, zippath, headers={"Accept": "application/zip"})
+            self.download(path, zippath, headers={"Accept": "*/*"})
             try:
                 with ZipFile(zippath) as zf:
                     zf.extractall(target_dir)
