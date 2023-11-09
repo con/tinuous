@@ -5,13 +5,13 @@ from collections.abc import Iterator, Mapping, Sequence
 from datetime import datetime, timezone
 import email.utils
 import logging
-import os
 from pathlib import Path
 import re
 from string import Formatter
-import subprocess
 from time import time
 from typing import Any, Optional
+
+from ghtoken import GHTokenNotFound, get_ghtoken
 
 log = logging.getLogger("tinuous")
 
@@ -121,20 +121,14 @@ def parse_slice(s: str) -> slice:
 
 
 def get_github_token() -> str:
-    token = os.environ.get("GITHUB_TOKEN")
-    if not token:
-        r = subprocess.run(
-            ["git", "config", "hub.oauthtoken"],
-            stdout=subprocess.PIPE,
-            universal_newlines=True,
+    try:
+        # main() already loads the user's dotenv file, so don't load it again
+        return get_ghtoken(dotenv=False)
+    except GHTokenNotFound:
+        raise RuntimeError(
+            "GitHub token not found.  Set via GH_TOKEN, GITHUB_TOKEN, gh, hub,"
+            " or hub.oauthtoken."
         )
-        if r.returncode != 0 or not r.stdout.strip():
-            raise RuntimeError(
-                "GitHub OAuth token not set.  Set via GITHUB_TOKEN"
-                " environment variable or hub.oauthtoken Git config option."
-            )
-        token = r.stdout.strip()
-    return token
 
 
 def sanitize_pathname(s: str) -> str:

@@ -549,9 +549,11 @@ alternative to setting them directly in the environment.
 GitHub
 ~~~~~~
 
-In order to retrieve assets from GitHub, a GitHub OAuth token must be specified
-either via the ``GITHUB_TOKEN`` environment variable or as the value of the
-``hub.oauthtoken`` Git config option.
+In order to retrieve assets from GitHub, a GitHub access token with appropriate
+permissions must be provided.  Specify the token via the ``GH_TOKEN`` or
+``GITHUB_TOKEN`` environment variable, by storing a token with the ``gh`` or
+``hub`` command, or by setting the ``hub.oauthtoken`` Git config option in your
+``~/.gitconfig`` file.
 
 Travis
 ~~~~~~
