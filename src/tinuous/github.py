@@ -35,7 +35,11 @@ class GitHubActions(CISystem):
     def client(self) -> APIClient:
         return APIClient(
             "https://api.github.com",
-            {"Authorization": f"token {self.token}"},
+            {
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"Bearer {self.token}",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
             is_github=True,
         )
 
@@ -440,7 +444,7 @@ class GHReleaseAsset(BaseModel, arbitrary_types_allowed=True):
             self.tag_name,
             target,
         )
-        self.client.download(self.download_url, target)
+        self.client.download(self.download_url, target, headers={"Accept": "*/*"})
         return [target]
 
 
