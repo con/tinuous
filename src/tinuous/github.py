@@ -60,13 +60,13 @@ class GitHubActions(CISystem):
 
     def get_workflows(self) -> Iterator[Workflow]:
         for item in self.paginate(f"/repos/{self.repo}/actions/workflows"):
-            wf = Workflow.parse_obj(item)
+            wf = Workflow.model_validate(item)
             if self.workflow_spec.match(wf.path):
                 yield wf
 
     def get_runs(self, wf: Workflow, since: datetime) -> Iterator[WorkflowRun]:
         for item in self.paginate(f"/repos/{self.repo}/actions/workflows/{wf.id}/runs"):
-            r = WorkflowRun.parse_obj(item)
+            r = WorkflowRun.model_validate(item)
             if r.created_at <= since:
                 break
             yield r
@@ -76,7 +76,7 @@ class GitHubActions(CISystem):
             f"/repos/{self.repo}/actions/workflows/{wf.id}/runs",
             params={"head_sha": head_sha},
         ):
-            yield WorkflowRun.parse_obj(item)
+            yield WorkflowRun.model_validate(item)
 
     def expand_committish(self, committish: str) -> str:
         try:
@@ -220,7 +220,7 @@ class GitHubActions(CISystem):
 
     def get_releases(self) -> Iterator[Release]:
         for item in self.paginate(f"/repos/{self.repo}/releases"):
-            yield Release.parse_obj(item)
+            yield Release.model_validate(item)
 
     def get_release_assets(self) -> Iterator[GHReleaseAsset]:
         log.info("Fetching releases newer than %s", self.since)
@@ -395,17 +395,14 @@ class GHAArtifact(GHAAsset, Artifact):
         return list(iterfiles(target_dir))
 
 
-class GHReleaseAsset(BaseModel):
+# The `arbitrary_types_allowed` is for APIClient
+class GHReleaseAsset(BaseModel, arbitrary_types_allowed=True):
     client: APIClient
     published_at: datetime
     tag_name: str
     commit: str
     name: str
     download_url: str
-
-    class Config:
-        # To allow APIClient:
-        arbitrary_types_allowed = True
 
     def path_fields(self) -> dict[str, Any]:
         utc_date = self.published_at.astimezone(timezone.utc)
@@ -466,14 +463,14 @@ class Repository(BaseModel):
 
 class WorkflowRun(BaseModel):
     id: int
-    name: Optional[str]
-    head_branch: Optional[str]
+    name: Optional[str] = None
+    head_branch: Optional[str] = None
     head_sha: str
     run_number: int
     run_attempt: Optional[int] = None
     event: str
-    status: Optional[str]
-    conclusion: Optional[str]
+    status: Optional[str] = None
+    conclusion: Optional[str] = None
     workflow_id: int
     pull_requests: List[PullRequest]
     created_at: datetime
@@ -494,5 +491,5 @@ class Release(BaseModel):
     draft: bool
     prerelease: bool
     created_at: datetime
-    published_at: Optional[datetime]
+    published_at: Optional[datetime] = None
     assets: List[ReleaseAsset]

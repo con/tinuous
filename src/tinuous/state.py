@@ -49,7 +49,7 @@ class StateFile(BaseModel):
             if s.strip() == "":
                 state = State()
             else:
-                state = State.parse_raw(s)
+                state = State.model_validate_json(s)
         return cls(path=p, state=state, migrating=migrating)
 
     def get_since(self, ciname: str) -> Optional[datetime]:
@@ -65,10 +65,10 @@ class StateFile(BaseModel):
         if self.migrating:
             log.debug("Renaming old statefile %s to %s", OLD_STATE_FILE, STATE_FILE)
             newpath = self.path.with_name(STATE_FILE)
-            newpath.write_text(self.state.json())
+            newpath.write_text(self.state.model_dump_json())
             self.path.unlink(missing_ok=True)
             self.path = newpath
             self.migrating = False
         else:
-            self.path.write_text(self.state.json())
+            self.path.write_text(self.state.model_dump_json())
         self.modified = True
