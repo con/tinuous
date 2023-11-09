@@ -327,7 +327,7 @@ class GHABuildLog(GHAAsset, BuildLog):
         try:
             self.client.download_zipfile(self.logs_url, path)
         except requests.HTTPError as e:
-            if e.response.status_code in (404, 410):
+            if e.response is not None and e.response.status_code in (404, 410):
                 # 404 can happen when a workflow failed to run due to, say, a
                 # syntax error.  410 happens when the logs have expired.
                 log.error(
