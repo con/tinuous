@@ -16,13 +16,6 @@ from typing import Any, Optional
 log = logging.getLogger("tinuous")
 
 
-def ensure_aware(dt: datetime) -> datetime:
-    # Pygithub returns naïve datetimes for timestamps with a "Z" suffix.  Until
-    # that's fixed <https://github.com/PyGithub/PyGithub/pull/1831>, we need to
-    # make such datetimes timezone-aware manually.
-    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
-
-
 def removeprefix(s: str, prefix: str) -> str:
     n = len(prefix)
     return s[n:] if s[:n] == prefix else s
