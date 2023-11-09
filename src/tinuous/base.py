@@ -159,12 +159,14 @@ class APIClient:
                 r.raise_for_status()
                 return r
 
-    def download(self, path: str, filepath: Path) -> None:
+    def download(
+        self, path: str, filepath: Path, headers: dict[str, str] | None = None
+    ) -> None:
         i = 0
         while True:
             try:
                 try:
-                    r = self.get(path, stream=True)
+                    r = self.get(path, stream=True, headers=headers)
                     with filepath.open("wb") as fp:
                         for chunk in r.iter_content(chunk_size=8192):
                             fp.write(chunk)
@@ -192,7 +194,7 @@ class APIClient:
         zippath = Path(fpath)
         i = 0
         while True:
-            self.download(path, zippath)
+            self.download(path, zippath, headers={"Accept": "application/zip"})
             try:
                 with ZipFile(zippath) as zf:
                     zf.extractall(target_dir)
