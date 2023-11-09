@@ -68,6 +68,7 @@ jobs:
           TRAVIS_TOKEN: ${{ secrets.TRAVIS_TOKEN }}
           APPVEYOR_TOKEN: ${{ secrets.APPVEYOR_TOKEN }}
           CIRCLECI_CLI_TOKEN: ${{ secrets.CIRCLECI_CLI_TOKEN }}
+          PYTHONWARNINGS: error
 
       - name: Coverage report
         run: |
