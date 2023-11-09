@@ -68,7 +68,7 @@ class Travis(CISystem):
         try:
             r = self.ghclient.get(f"/repos/{self.repo}/commits/{commit_sha}")
         except requests.HTTPError as e:
-            if e.response.status_code == 404:
+            if e.response is not None and e.response.status_code == 404:
                 return None
             else:
                 raise e
