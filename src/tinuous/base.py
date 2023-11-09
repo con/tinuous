@@ -7,6 +7,7 @@ from enum import Enum
 import heapq
 import os
 from pathlib import Path, PurePosixPath
+import platform
 import re
 from shutil import rmtree
 import sys
@@ -20,6 +21,7 @@ import requests
 from requests.exceptions import ChunkedEncodingError
 from requests.exceptions import ConnectionError as ReqConError
 
+from . import __url__, __version__
 from .util import (
     delay_until,
     expand_template,
@@ -32,6 +34,14 @@ if sys.version_info >= (3, 9):
     from typing import Annotated
 else:
     from typing_extensions import Annotated
+
+USER_AGENT = "tinuous/{} ({}) requests/{} {}/{}".format(
+    __version__,
+    __url__,
+    requests.__version__,
+    platform.python_implementation(),
+    platform.python_version(),
+)
 
 
 class CommonStatus(Enum):
@@ -104,6 +114,7 @@ class APIClient:
     def __init__(self, base_url: str, headers: dict[str, str], is_github: bool = False):
         self.base_url = base_url
         self.session = requests.Session()
+        self.session.headers["User-Agent"] = USER_AGENT
         self.session.headers.update(headers)
         self.is_github = is_github
 
