@@ -202,13 +202,13 @@ class CISystem(ABC, BaseModel):
     @staticmethod
     @abstractmethod
     def get_auth_tokens() -> dict[str, str]:
-        ...  # pragma: no cover
+        ...
 
     @abstractmethod
     def get_build_assets(
         self, event_types: list[EventType], logs: bool, artifacts: bool
     ) -> Iterator[BuildAsset]:
-        ...  # pragma: no cover
+        ...
 
     def register_build(self, ts: datetime, processed: bool) -> None:
         heapq.heappush(self.fetched, (ts, processed))
@@ -268,7 +268,7 @@ class BuildAsset(ABC, BaseModel):
 
     @abstractmethod
     def download(self, path: Path) -> list[Path]:
-        ...  # pragma: no cover
+        ...
 
 
 class BuildLog(BuildAsset):
