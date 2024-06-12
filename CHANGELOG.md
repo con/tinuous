@@ -1,3 +1,52 @@
+# 0.7.0 (Wed Jun 12 2024)
+
+#### 🚀 Enhancement
+
+- Use `ghtoken` to fetch GitHub token from more sources [#184](https://github.com/con/tinuous/pull/184) ([@jwodder](https://github.com/jwodder))
+- Add `fetch-commit` command [#171](https://github.com/con/tinuous/pull/171) ([@jwodder](https://github.com/jwodder))
+- Support fetching logs & artifacts from CircleCI [#164](https://github.com/con/tinuous/pull/164) ([@jwodder](https://github.com/jwodder))
+
+#### 🐛 Bug Fix
+
+- CircleCI: Handle `null` vcs.provider_name [#190](https://github.com/con/tinuous/pull/190) ([@jwodder](https://github.com/jwodder))
+- Improve headers sent in HTTP requests [#182](https://github.com/con/tinuous/pull/182) ([@jwodder](https://github.com/jwodder))
+- Add "Decoupled Ingestion System" as pipeline trigger type [#168](https://github.com/con/tinuous/pull/168) ([@jwodder](https://github.com/jwodder))
+
+#### 🏠 Internal
+
+- [gh-actions](deps): Bump codecov/codecov-action from 3 to 4 [#187](https://github.com/con/tinuous/pull/187) ([@dependabot[bot]](https://github.com/dependabot[bot]) [@jwodder](https://github.com/jwodder))
+- [gh-actions](deps): Bump actions/setup-python from 4 to 5 [#186](https://github.com/con/tinuous/pull/186) ([@dependabot[bot]](https://github.com/dependabot[bot]))
+- Remove unused `ensure_aware()` function [#174](https://github.com/con/tinuous/pull/174) ([@jwodder](https://github.com/jwodder))
+- Don't do GitHub CI "push" runs on non-default branches [#185](https://github.com/con/tinuous/pull/185) ([@jwodder](https://github.com/jwodder))
+- Guard against common status typos with an enum [#183](https://github.com/con/tinuous/pull/183) ([@jwodder](https://github.com/jwodder))
+- [gh-actions](deps): Bump actions/checkout from 3 to 4 [#173](https://github.com/con/tinuous/pull/173) ([@dependabot[bot]](https://github.com/dependabot[bot]))
+- [gh-actions](deps): Bump codespell-project/actions-codespell from 1 to 2 [#172](https://github.com/con/tinuous/pull/172) ([@dependabot[bot]](https://github.com/dependabot[bot]))
+- Apply codespell to more branches than just "cleanup" [#169](https://github.com/con/tinuous/pull/169) ([@jwodder](https://github.com/jwodder))
+- Fix codespell version [#167](https://github.com/con/tinuous/pull/167) ([@jwodder](https://github.com/jwodder))
+- Add codespell to cleanup [#166](https://github.com/con/tinuous/pull/166) ([@yarikoptic](https://github.com/yarikoptic))
+- Assorted code improvements [#165](https://github.com/con/tinuous/pull/165) ([@jwodder](https://github.com/jwodder))
+
+#### 🧪 Tests
+
+- mypy: Set `ignore_missing_imports = False` [#177](https://github.com/con/tinuous/pull/177) ([@jwodder](https://github.com/jwodder))
+- Test against Python 3.12 [#178](https://github.com/con/tinuous/pull/178) ([@jwodder](https://github.com/jwodder))
+- Test against PyPy [#179](https://github.com/con/tinuous/pull/179) ([@jwodder](https://github.com/jwodder))
+- Remove redundant `pragma: no cover` comments [#180](https://github.com/con/tinuous/pull/180) ([@jwodder](https://github.com/jwodder))
+- Fix type-checking failures [#175](https://github.com/con/tinuous/pull/175) ([@jwodder](https://github.com/jwodder))
+- Test against Python 3.11 and add it to Python setup classifiers [#156](https://github.com/con/tinuous/pull/156) ([@jwodder](https://github.com/jwodder))
+
+#### 🔩 Dependency Updates
+
+- Update pydantic and in_place versions [#176](https://github.com/con/tinuous/pull/176) ([@jwodder](https://github.com/jwodder))
+
+#### Authors: 3
+
+- [@dependabot[bot]](https://github.com/dependabot[bot])
+- John T. Wodder II ([@jwodder](https://github.com/jwodder))
+- Yaroslav Halchenko ([@yarikoptic](https://github.com/yarikoptic))
+
+---
+
 # 0.6.1 (Thu Feb 09 2023)
 
 #### 🐛 Bug Fix
