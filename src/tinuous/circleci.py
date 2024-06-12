@@ -96,7 +96,7 @@ class CircleCI(CISystem):
         if self.until is not None:
             log.info("Skipping pipelines newer than %s", self.until)
         for pipeline in self.get_pipelines():
-            if pipeline.vcs is None or pipeline.vcs.provider_name.lower() != "github":
+            if pipeline.vcs is None or not pipeline.vcs.is_github():
                 log.debug(
                     "Skipping pipeline %d as it is not associated with GitHub",
                     pipeline.number,
@@ -155,9 +155,11 @@ class CircleCI(CISystem):
                                             job=job.job_number,
                                             job_id=job.id,
                                             job_name=sanitize_pathname(job.name),
-                                            step=str(action.step)
-                                            if action.step is not None
-                                            else "UNK",
+                                            step=(
+                                                str(action.step)
+                                                if action.step is not None
+                                                else "UNK"
+                                            ),
                                             step_name=sanitize_pathname(step.name),
                                             index=action.index,
                                         )
@@ -360,7 +362,7 @@ class Trigger(BaseModel):
 
 
 class VCS(BaseModel):
-    provider_name: str
+    provider_name: Optional[str]
     # target_repository_url: str
     branch: Optional[str] = None
     # review_id: Optional[str] = None
@@ -369,6 +371,9 @@ class VCS(BaseModel):
     tag: Optional[str] = None
     # commit: Optional[Commit] = None
     # origin_repository_url: str
+
+    def is_github(self) -> bool:
+        return self.provider_name is not None and self.provider_name.lower() == "github"
 
 
 class Pipeline(BaseModel):
