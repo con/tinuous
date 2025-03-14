@@ -321,6 +321,8 @@ class TriggerType(Enum):
     WEBHOOK = "webhook"
     # Seen in the wild; I have no idea what this is:
     DECOUPLED_INGESTION_SYSTEM = "Decoupled Ingestion System"
+    # Seen in the wild:
+    UNKNOWN = "unknown"
 
     def as_event_type(self) -> EventType:
         if self is TriggerType.SCHEDULED:
@@ -339,6 +341,9 @@ class TriggerType(Enum):
         elif self is TriggerType.DECOUPLED_INGESTION_SYSTEM:
             # Just a guess
             return EventType.PUSH
+        elif self is TriggerType.UNKNOWN:
+            # What else are we going to do?
+            return EventType.MANUAL
         else:
             raise AssertionError(f"Unexpected TriggerType {self!r}")
 
