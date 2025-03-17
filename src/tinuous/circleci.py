@@ -315,7 +315,7 @@ class CCIArtifact(BaseArtifact):
 
 
 class TriggerType(Enum):
-    SCHEDULED = "scheduled-pipeline"
+    SCHEDULED = "scheduled_pipeline"
     EXPLICIT = "explicit"
     API = "api"
     WEBHOOK = "webhook"
