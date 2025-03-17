@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, List, Optional
 
 from pydantic import BaseModel
+import requests
 from yaml import safe_load
 
 from .base import APIClient
@@ -236,10 +237,20 @@ class CCIActionLog(BuildLog):
             return []
         path.parent.mkdir(parents=True, exist_ok=True)
         log.info("Downloading logs for %s to %s", self.id, path)
-        self.client.download(
-            f"/v1.1/project/github/{self.repo}/{self.job}/output/{self.step}/{self.index}?file=true",
-            path,
-        )
+        try:
+            self.client.download(
+                f"/v1.1/project/github/{self.repo}/{self.job}/output/{self.step}/{self.index}?file=true",
+                path,
+            )
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                # 404 can happen when a job was cancelled before it began.
+                log.error(
+                    "Request for logs returned %d; skipping", e.response.status_code
+                )
+                return []
+            else:
+                raise
         return [path]
 
 
