@@ -143,6 +143,9 @@ class CircleCI(CISystem):
                     else:
                         raise AssertionError(f"Unhandled EventType: {run_event!r}")
                     for wf in workflows:
+                        if wf.status is WorkflowStatus.NOT_RUN:
+                            log.info("Workflow %r not run; skipping", wf.name)
+                            continue
                         for job in self.get_jobs(wf.id):
                             if job.job_number is None:
                                 # This can happen if the job was cancelled.
