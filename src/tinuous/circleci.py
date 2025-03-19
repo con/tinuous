@@ -68,8 +68,18 @@ class CircleCI(CISystem):
         for item in self.paginate(f"/v2/project/gh/{self.repo}/pipeline"):
             yield Pipeline.model_validate(item)
 
-    def get_workflows(self, pipeline_id: str) -> Iterator[Workflow]:
+    def get_workflows(
+        self, pipeline_id: str, pipeline_number: int
+    ) -> Iterator[Workflow]:
         for item in self.paginate(f"/v2/pipeline/{pipeline_id}/workflow"):
+            if item.get("id") is None:
+                # Seen in the wild once; no idea what happened
+                log.warning(
+                    "Pipeline %d contains a malformed workflow with null ID;"
+                    " discarding workflow",
+                    pipeline_number,
+                )
+                continue
             wf = Workflow.model_validate(item)
             if self.workflow_spec.match(wf.name):
                 yield wf
@@ -109,7 +119,7 @@ class CircleCI(CISystem):
                 break
             elif self.until is not None and pipeline.created_at > self.until:
                 log.info("Pipeline %d is too new; skipping", pipeline.number)
-            workflows = list(self.get_workflows(pipeline.id))
+            workflows = list(self.get_workflows(pipeline.id, pipeline.number))
             if any(not wf.status.finished() for wf in workflows):
                 log.info("Pipeline %d not completed; skipping", pipeline.number)
                 self.register_build(pipeline.created_at, False)
