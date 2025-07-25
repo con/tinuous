@@ -39,8 +39,7 @@ jobs:
       - name: Install datalad and git-annex
         if: matrix.extra == 'datalad'
         run: |
-          python -m pip install datalad datalad-installer
-          datalad-installer --sudo ok neurodebian git-annex -m neurodebian
+          python -m pip install git-annex datalad
 
       - name: Checkout con/tinuous-inception
         uses: actions/checkout@v4
