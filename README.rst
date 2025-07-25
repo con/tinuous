@@ -40,7 +40,7 @@ See <https://github.com/con/tinuous-inception> for an example setup that uses
 
 Installation
 ============
-``tinuous`` requires Python 3.8 or higher.  Just use `pip
+``tinuous`` requires Python 3.9 or higher.  Just use `pip
 <https://pip.pypa.io>`_ for Python 3 (You have pip, right?) to install
 ``tinuous`` and its dependencies::
 

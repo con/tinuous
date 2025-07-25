@@ -21,7 +21,7 @@ workflows:
       - test:
           matrix:
             parameters:
-              python-version: ["3.8", "3.9", "3.10", "3.11"]
+              python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
       - lint
       - typing
 
@@ -43,7 +43,7 @@ jobs:
 
   lint:
     docker:
-      - image: cimg/python:3.8
+      - image: cimg/python:3.10
     steps:
       - checkout
       - install-deps
@@ -53,7 +53,7 @@ jobs:
 
   typing:
     docker:
-      - image: cimg/python:3.8
+      - image: cimg/python:3.10
     steps:
       - checkout
       - install-deps
