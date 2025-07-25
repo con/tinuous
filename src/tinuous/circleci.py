@@ -151,7 +151,21 @@ class CircleCI(CISystem):
                                 # This can happen if the job was cancelled.
                                 continue
                             if logs:
-                                for step in self.get_jobv1(job.job_number).steps:
+                                try:
+                                    jobv1 = self.get_jobv1(job.job_number)
+                                except requests.HTTPError as e:
+                                    if (
+                                        e.response is not None
+                                        and e.response.status_code == 404
+                                    ):
+                                        log.warning(
+                                            "Job %d returned 404; skipping logs",
+                                            job.job_number,
+                                        )
+                                        continue
+                                    else:
+                                        raise
+                                for step in jobv1.steps:
                                     for action in step.actions:
                                         yield CCIActionLog(
                                             client=self.client,
