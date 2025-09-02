@@ -143,6 +143,7 @@ def test_removeprefix(s: str, prefix: str, result: str) -> None:
         ('"foo"', "%22foo%22"),
         ("foo?", "foo%3f"),
         ("foo*bar", "foo%2abar"),
+        ("foo~bar", "foo%7ebar"),
         ("foo%20bar", "foo%2520bar"),
         ("foo\0bar", "foo%00bar"),
     ],
