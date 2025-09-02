@@ -1,3 +1,27 @@
+# 0.7.1 (Tue Sep 02 2025)
+
+#### 🐛 Bug Fix
+
+- Sanitize ~ in pathname (we do not use/rely on ~ ATM) [#214](https://github.com/con/tinuous/pull/214) ([@yarikoptic](https://github.com/yarikoptic))
+- Fix up CI and boost Python version to drop 3.8 [#212](https://github.com/con/tinuous/pull/212) ([@yarikoptic](https://github.com/yarikoptic))
+- CircleCI: Skip "not run" workflows [#205](https://github.com/con/tinuous/pull/205) ([@jwodder](https://github.com/jwodder))
+- Discard CircleCI workflows with null IDs [#204](https://github.com/con/tinuous/pull/204) ([@jwodder](https://github.com/jwodder))
+- CircleCI: Skip logs that return a 404 status when downloading [#202](https://github.com/con/tinuous/pull/202) ([@jwodder](https://github.com/jwodder))
+- Fix spelling of CircleCI's `scheduled_pipeline` event type [#201](https://github.com/con/tinuous/pull/201) ([@jwodder](https://github.com/jwodder))
+- Support CircleCI's "unknown" pipeline trigger type [#199](https://github.com/con/tinuous/pull/199) ([@jwodder](https://github.com/jwodder))
+
+#### 🧪 Tests
+
+- [gh-actions](deps): Bump codecov/codecov-action from 4 to 5 [#198](https://github.com/con/tinuous/pull/198) ([@dependabot[bot]](https://github.com/dependabot[bot]))
+
+#### Authors: 3
+
+- [@dependabot[bot]](https://github.com/dependabot[bot])
+- John T. Wodder II ([@jwodder](https://github.com/jwodder))
+- Yaroslav Halchenko ([@yarikoptic](https://github.com/yarikoptic))
+
+---
+
 # 0.7.0 (Wed Jun 12 2024)
 
 #### 🚀 Enhancement
