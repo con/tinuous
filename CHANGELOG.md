@@ -1,3 +1,15 @@
+# 0.7.2 (Tue Sep 02 2025)
+
+#### 🐛 Bug Fix
+
+- Revert "Sanitize ~ in pathname (we do not use/rely on ~ ATM)" [#216](https://github.com/con/tinuous/pull/216) ([@yarikoptic](https://github.com/yarikoptic))
+
+#### Authors: 1
+
+- Yaroslav Halchenko ([@yarikoptic](https://github.com/yarikoptic))
+
+---
+
 # 0.7.1 (Tue Sep 02 2025)
 
 #### 🐛 Bug Fix
