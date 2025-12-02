@@ -72,9 +72,9 @@ class TestGitHubActionsSkipIncompletePR:
 
         # PR with sha "abc123" has one completed and one running workflow
         run1_completed = make_run(
-            101, 1, "abc123" * 7, "pull_request", "completed", "success"
+            101, 1, "a" * 40, "pull_request", "completed", "success"
         )
-        run2_running = make_run(102, 2, "abc123" * 7, "pull_request", "in_progress")
+        run2_running = make_run(102, 2, "a" * 40, "pull_request", "in_progress")
 
         # Create the GitHubActions instance with mocked methods
         gh = GitHubActions(
@@ -124,10 +124,10 @@ class TestGitHubActionsSkipIncompletePR:
 
         # Both workflows completed for the same PR
         run1_completed = make_run(
-            101, 1, "abc123" * 7, "pull_request", "completed", "success"
+            101, 1, "a" * 40, "pull_request", "completed", "success"
         )
         run2_completed = make_run(
-            102, 2, "abc123" * 7, "pull_request", "completed", "success"
+            102, 2, "a" * 40, "pull_request", "completed", "success"
         )
 
         gh = GitHubActions(
@@ -178,10 +178,10 @@ class TestGitHubActionsSkipIncompletePR:
 
         # Push event - completed
         run1_completed = make_run(
-            101, 1, "abc123" * 7, "push", "completed", "success"
+            101, 1, "a" * 40, "push", "completed", "success"
         )
         # Push event - still running (different workflow)
-        run2_running = make_run(102, 2, "abc123" * 7, "push", "in_progress")
+        run2_running = make_run(102, 2, "a" * 40, "push", "in_progress")
 
         gh = GitHubActions(
             repo="test/test",
@@ -225,11 +225,11 @@ class TestGitHubActionsSkipIncompletePR:
 
         # PR run - completed
         run1_pr_completed = make_run(
-            101, 1, "pr_sha" * 7, "pull_request", "completed", "success"
+            101, 1, "a" * 40, "pull_request", "completed", "success"
         )
         # Push run - completed
         run2_push_completed = make_run(
-            102, 2, "push_sha" * 7, "push", "completed", "success"
+            102, 2, "b" * 40, "push", "completed", "success"
         )
 
         gh = GitHubActions(
