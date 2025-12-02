@@ -25,10 +25,14 @@ class PathsDict(NoExtraModel):
     def gets_releases(self) -> bool:
         return False
 
+    def gets_packages(self) -> bool:
+        return False
+
 
 class GHPathsDict(PathsDict):
     artifacts: Optional[str] = None
     releases: Optional[str] = None
+    packages: Optional[str] = None
 
     def gets_builds(self) -> bool:
         # <https://github.com/pydantic/pydantic/issues/8052>
@@ -36,6 +40,9 @@ class GHPathsDict(PathsDict):
 
     def gets_releases(self) -> bool:
         return self.releases is not None
+
+    def gets_packages(self) -> bool:
+        return self.packages is not None
 
 
 class CCIPathsDict(PathsDict):
@@ -69,6 +76,9 @@ class CIConfig(NoExtraModel, ABC):
 
     def gets_releases(self) -> bool:
         return self.paths.gets_releases()
+
+    def gets_packages(self) -> bool:
+        return self.paths.gets_packages()
 
 
 class GitHubConfig(CIConfig):

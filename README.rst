@@ -193,6 +193,14 @@ keys:
                 under which the release's assets will be saved.  If this is not
                 specified, no release assets will be downloaded.
 
+            ``packages``
+                A template string that will be instantiated for each package
+                version (from GitHub Container Registry) to produce the path
+                for the directory (relative to the current working directory)
+                under which the package version metadata will be saved as a
+                JSON file.  If this is not specified, no package metadata will
+                be saved.
+
         ``workflows``
             A specification of the workflows for which to retrieve assets.
             This can be either a list of workflow basenames, including the file
@@ -399,6 +407,7 @@ A sample config file:
           logs: '{build_prefix}/{wf_name}/{number}/logs/'
           artifacts: '{build_prefix}/{wf_name}/{number}/artifacts/'
           releases: '{path_prefix}/{release_tag}/'
+          packages: '{year}//{month}/{ci}/packages/{package_name}/{tag}/'
         workflows:
           - test_crippled.yml
           - test_extensions.yml
@@ -432,9 +441,10 @@ A sample config file:
 Path Templates
 --------------
 
-The path at which assets for a given workflow run, build job, or release are
-saved is determined by instantiating the appropriate path template string given
-in the configuration file for the corresponding CI system.  A template string
+The path at which assets for a given workflow run, build job, release, or
+package version are saved is determined by instantiating the appropriate path
+template string given in the configuration file for the corresponding CI system.
+A template string
 is a filepath containing placeholders of the form ``{field}``, where the
 available placeholders are:
 
@@ -468,7 +478,7 @@ Placeholder             Definition
                         ``appveyor``, or ``circleci``)
 ``{type}``              The event type that triggered the build (``cron``,
                         ``manual``, ``pr``, or ``push``), or ``release`` for
-                        GitHub releases
+                        GitHub releases, or ``package`` for GitHub Packages
 ``{type_id}``           Further information on the triggering event; for
                         ``cron`` and ``manual``, this is a timestamp for the
                         start of the build; for ``pr``, this is the number of
@@ -519,6 +529,18 @@ Placeholder             Definition
 ``{step_name}``         *(CircleCI only)* The escaped [1]_ name of the step [2]_
 ``{index}``             *(CircleCI only)* The index of the parallel container
                         that the step ran on [2]_
+``{package_name}``      *(``packages`` path only)* The escaped [1]_ name of the
+                        package [3]_
+``{package_type}``      *(``packages`` path only)* The type of the package
+                        (e.g., ``container``) [3]_
+``{version_id}``        *(``packages`` path only)* The unique ID of the package
+                        version [3]_
+``{version_name}``      *(``packages`` path only)* The escaped [1]_ name/digest
+                        of the package version [3]_
+``{tag}``               *(``packages`` path only)* The primary tag of the
+                        package version, or version_name if no tags [3]_
+``{tags}``              *(``packages`` path only)* Comma-separated list of all
+                        tags for the package version [3]_
 ======================  =======================================================
 
 .. _datetime: https://docs.python.org/3/library/datetime.html#datetime-objects
@@ -529,7 +551,9 @@ Placeholder             Definition
        replacing each whitespace character with a space.
 
 .. [2] These placeholders are only available for ``path`` and
-       ``artifacts_path``, not ``releases_path``
+       ``artifacts_path``, not ``releases_path`` or ``packages``
+
+.. [3] These placeholders are only available for ``packages`` path
 
 A placeholder's value may be truncated to the first ``n`` characters by writing
 ``{placeholder[:n]}``, e.g., ``{commit[:7]}``.

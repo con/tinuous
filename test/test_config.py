@@ -135,7 +135,29 @@ from tinuous.config import GHPathsDict, GitHubConfig
                 ),
             ),
         ),
+        (
+            {
+                "paths": {
+                    "packages": "{year}/{package_name}/{tag}/",
+                },
+            },
+            GitHubConfig(
+                paths=GHPathsDict(packages="{year}/{package_name}/{tag}/"),
+                workflows=GHWorkflowSpec(
+                    regex=False, include=[re.compile(r".*")], exclude=[]
+                ),
+            ),
+        ),
     ],
 )
 def test_parse_github_config(data: dict[str, Any], cfg: GitHubConfig) -> None:
     assert GitHubConfig.model_validate(data) == cfg
+
+
+def test_ghpathsdict_gets_packages() -> None:
+    """Test gets_packages method for GHPathsDict."""
+    paths_without_packages = GHPathsDict(logs="logs/")
+    assert not paths_without_packages.gets_packages()
+
+    paths_with_packages = GHPathsDict(packages="{year}/{package_name}/")
+    assert paths_with_packages.gets_packages()

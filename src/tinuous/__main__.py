@@ -104,8 +104,13 @@ def fetch(config_file: str, state_path: Optional[str], sanitize_secrets: bool) -
     logs_added = 0
     artifacts_added = 0
     relassets_added = 0
+    packages_added = 0
     for name, cicfg in cfg.ci.items():
-        if not cicfg.gets_builds() and not cicfg.gets_releases():
+        if (
+            not cicfg.gets_builds()
+            and not cicfg.gets_releases()
+            and not cicfg.gets_packages()
+        ):
             log.info("No paths configured for %s; skipping", name)
             continue
         log.info("Fetching resources from %s", name)
@@ -143,23 +148,37 @@ def fetch(config_file: str, state_path: Optional[str], sanitize_secrets: bool) -
             assert isinstance(cicfg.paths, GHPathsDict)
             releases_path = cicfg.paths.releases
             assert releases_path is not None
-            for asset in ci.get_release_assets():
-                path = asset.expand_path(releases_path, cfg.vars)
+            for rel_asset in ci.get_release_assets():
+                path = rel_asset.expand_path(releases_path, cfg.vars)
                 if cfg.datalad.enabled:
                     ensure_datalad(ds, path, cfg.datalad.cfg_proc)
-                paths = asset.download(Path(path))
+                paths = rel_asset.download(Path(path))
                 relassets_added += len(paths)
+        if cicfg.gets_packages():
+            assert isinstance(ci, GitHubActions)
+            assert isinstance(cicfg.paths, GHPathsDict)
+            packages_path = cicfg.paths.packages
+            assert packages_path is not None
+            for pkg_asset in ci.get_package_assets():
+                path = pkg_asset.expand_path(packages_path, cfg.vars)
+                if cfg.datalad.enabled:
+                    ensure_datalad(ds, path, cfg.datalad.cfg_proc)
+                paths = pkg_asset.download(Path(path))
+                packages_added += len(paths)
         statefile.set_since(name, ci.new_since())
     log.info("%d logs downloaded", logs_added)
     log.info("%d artifacts downloaded", artifacts_added)
     log.info("%d release assets downloaded", relassets_added)
+    log.info("%d package versions saved", packages_added)
     if cfg.datalad.enabled:
-        if logs_added or artifacts_added or relassets_added:
+        if logs_added or artifacts_added or relassets_added or packages_added:
             msg = f"[tinuous] {logs_added} logs added"
             if artifacts_added:
                 msg += f", {artifacts_added} artifacts added"
             if relassets_added:
                 msg += f", {relassets_added} release assets added"
+            if packages_added:
+                msg += f", {packages_added} package versions added"
             msg += f"\n\nProduced by tinuous {__version__}"
             ds.save(recursive=True, message=msg)
         elif statefile.modified:

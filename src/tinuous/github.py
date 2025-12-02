@@ -264,6 +264,67 @@ class GitHubActions(CISystem):
                     download_url=asset.browser_download_url,
                 )
 
+    def get_packages(self) -> Iterator[Package]:
+        # First get the owner type (user or org) from the repo name
+        owner = self.repo.split("/")[0]
+        # Try organization packages first, fall back to user packages
+        for endpoint in [
+            f"/orgs/{owner}/packages",
+            f"/users/{owner}/packages",
+        ]:
+            try:
+                params = {"package_type": "container"}
+                for item in self.paginate(endpoint, params=params):
+                    yield Package.model_validate(item)
+                return  # Successfully fetched packages
+            except requests.HTTPError as e:
+                if e.response is not None and e.response.status_code == 404:
+                    continue  # Try next endpoint
+                raise
+
+    def get_package_versions(self, package: Package) -> Iterator[PackageVersion]:
+        owner = self.repo.split("/")[0]
+        # Try organization packages first, fall back to user packages
+        pkg_name = quote(package.name, safe="")
+        for endpoint_base in [
+            f"/orgs/{owner}/packages/container/{pkg_name}/versions",
+            f"/users/{owner}/packages/container/{pkg_name}/versions",
+        ]:
+            try:
+                for item in self.paginate(endpoint_base):
+                    yield PackageVersion.model_validate(item)
+                return  # Successfully fetched versions
+            except requests.HTTPError as e:
+                if e.response is not None and e.response.status_code == 404:
+                    continue  # Try next endpoint
+                raise
+
+    def get_package_assets(self) -> Iterator[GHPackageAsset]:
+        log.info("Fetching packages newer than %s", self.since)
+        if self.until is not None:
+            log.info("Skipping packages newer than %s", self.until)
+        for pkg in self.get_packages():
+            log.info("Found package %s", pkg.name)
+            for version in self.get_package_versions(pkg):
+                ts = version.updated_at
+                if ts <= self.since or (self.until is not None and ts > self.until):
+                    continue
+                self.register_build(ts, True)
+                log.info(
+                    "Found package version %s for %s",
+                    version.metadata.container.tags,
+                    pkg.name,
+                )
+                yield GHPackageAsset(
+                    client=self.client,
+                    updated_at=ts,
+                    package_name=pkg.name,
+                    package_type=pkg.package_type,
+                    version_id=version.id,
+                    version_name=version.name,
+                    tags=version.metadata.container.tags,
+                )
+
 
 class GHAAsset(BuildAsset):
     workflow_name: str
@@ -497,3 +558,99 @@ class Release(BaseModel):
     created_at: datetime
     published_at: Optional[datetime] = None
     assets: List[ReleaseAsset]
+
+
+class ContainerMetadata(BaseModel):
+    tags: List[str]
+
+
+class PackageMetadata(BaseModel):
+    container: ContainerMetadata
+
+
+class PackageVersion(BaseModel):
+    id: int
+    name: str
+    created_at: datetime
+    updated_at: datetime
+    metadata: PackageMetadata
+
+
+class Package(BaseModel):
+    id: int
+    name: str
+    package_type: str
+    created_at: datetime
+    updated_at: datetime
+
+
+# The `arbitrary_types_allowed` is for APIClient
+class GHPackageAsset(BaseModel, arbitrary_types_allowed=True):
+    client: APIClient
+    updated_at: datetime
+    package_name: str
+    package_type: str
+    version_id: int
+    version_name: str
+    tags: List[str]
+
+    def path_fields(self) -> dict[str, Any]:
+        utc_date = self.updated_at.astimezone(timezone.utc)
+        # Use the first tag as primary tag, or version_name if no tags
+        primary_tag = self.tags[0] if self.tags else self.version_name
+        return {
+            "timestamp": utc_date,
+            "timestamp_local": self.updated_at.astimezone(),
+            "year": utc_date.strftime("%Y"),
+            "month": utc_date.strftime("%m"),
+            "day": utc_date.strftime("%d"),
+            "hour": utc_date.strftime("%H"),
+            "minute": utc_date.strftime("%M"),
+            "second": utc_date.strftime("%S"),
+            "ci": "github",
+            "type": "package",
+            "package_name": sanitize_pathname(self.package_name),
+            "package_type": self.package_type,
+            "version_id": str(self.version_id),
+            "version_name": sanitize_pathname(self.version_name),
+            "tag": sanitize_pathname(primary_tag),
+            "tags": ",".join(sanitize_pathname(t) for t in self.tags),
+        }
+
+    def expand_path(self, path_template: str, variables: dict[str, str]) -> str:
+        return expand_template(path_template, self.path_fields(), variables)
+
+    def download(self, path: Path) -> list[Path]:
+        # For packages (containers), we store metadata instead of actual content
+        # since container images require docker/podman to pull
+        filename = f"{self.version_name}.json"
+        target = path / filename
+        if target.exists():
+            log.info(
+                "Metadata for package %s version %s already exists at %s; skipping",
+                self.package_name,
+                self.version_name,
+                target,
+            )
+            return []
+        path.mkdir(parents=True, exist_ok=True)
+        log.info(
+            "Saving metadata for package %s version %s to %s",
+            self.package_name,
+            self.version_name,
+            target,
+        )
+        # Write metadata as JSON
+        import json
+
+        metadata = {
+            "package_name": self.package_name,
+            "package_type": self.package_type,
+            "version_id": self.version_id,
+            "version_name": self.version_name,
+            "tags": self.tags,
+            "updated_at": self.updated_at.isoformat(),
+        }
+        with target.open("w", encoding="utf-8") as fp:
+            json.dump(metadata, fp, indent=2)
+        return [target]
