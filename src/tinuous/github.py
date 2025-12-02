@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from functools import cached_property
+import json
 from pathlib import Path
 import re
 from typing import Any, Dict, List, Optional
@@ -310,9 +311,12 @@ class GitHubActions(CISystem):
                 if ts <= self.since or (self.until is not None and ts > self.until):
                     continue
                 self.register_build(ts, True)
+                tags = version.metadata.container.tags
+                tags_str = ", ".join(tags) if tags else "(no tags)"
                 log.info(
-                    "Found package version %s for %s",
-                    version.metadata.container.tags,
+                    "Found package version %s (tags: %s) for %s",
+                    version.name,
+                    tags_str,
                     pkg.name,
                 )
                 yield GHPackageAsset(
@@ -322,7 +326,7 @@ class GitHubActions(CISystem):
                     package_type=pkg.package_type,
                     version_id=version.id,
                     version_name=version.name,
-                    tags=version.metadata.container.tags,
+                    tags=tags,
                 )
 
 
@@ -641,8 +645,6 @@ class GHPackageAsset(BaseModel, arbitrary_types_allowed=True):
             target,
         )
         # Write metadata as JSON
-        import json
-
         metadata = {
             "package_name": self.package_name,
             "package_type": self.package_type,
