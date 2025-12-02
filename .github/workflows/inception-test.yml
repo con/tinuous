@@ -54,12 +54,20 @@ jobs:
             echo "TRAVIS_TOKEN not set, removing Travis from config"
             python -c "
           import yaml
-          with open('tinuous.yaml') as f:
-              cfg = yaml.safe_load(f)
-          if 'travis' in cfg.get('ci', {}):
-              del cfg['ci']['travis']
-          with open('tinuous.yaml', 'w') as f:
-              yaml.dump(cfg, f, default_flow_style=False)
+          import sys
+          try:
+              with open('tinuous.yaml') as f:
+                  cfg = yaml.safe_load(f)
+              if cfg and 'ci' in cfg and 'travis' in cfg['ci']:
+                  del cfg['ci']['travis']
+                  with open('tinuous.yaml', 'w') as f:
+                      yaml.dump(cfg, f, default_flow_style=False)
+                  print('Travis config removed successfully')
+              else:
+                  print('No Travis config found to remove')
+          except Exception as e:
+              print(f'Warning: Could not modify config: {e}', file=sys.stderr)
+              sys.exit(1)
           "
           else
             echo "TRAVIS_TOKEN is set, keeping Travis config"
