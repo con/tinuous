@@ -47,6 +47,27 @@ jobs:
           repository: con/tinuous-inception
           path: tinuous-inception
 
+      - name: Remove Travis config if no token
+        run: |
+          # Remove travis section from tinuous.yaml when TRAVIS_TOKEN is not set
+          if [ -z "$TRAVIS_TOKEN" ]; then
+            echo "TRAVIS_TOKEN not set, removing Travis from config"
+            python -c "
+          import yaml
+          with open('tinuous.yaml') as f:
+              cfg = yaml.safe_load(f)
+          if 'travis' in cfg.get('ci', {}):
+              del cfg['ci']['travis']
+          with open('tinuous.yaml', 'w') as f:
+              yaml.dump(cfg, f, default_flow_style=False)
+          "
+          else
+            echo "TRAVIS_TOKEN is set, keeping Travis config"
+          fi
+        working-directory: tinuous-inception
+        env:
+          TRAVIS_TOKEN: ${{ secrets.TRAVIS_TOKEN }}
+
       - name: Configure datalad
         if: matrix.extra == 'datalad'
         run: |
