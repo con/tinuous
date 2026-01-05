@@ -112,6 +112,15 @@ Options
                                 in the given file [default value:
                                 ``.tinuous.state.json``]
 
+--since TIMESTAMP               Override the ``since`` timestamp to force
+                                refetching builds after the given time.  This
+                                overrides both the state file and configuration
+                                file settings.  Accepts ISO 8601 timestamps
+                                (e.g., ``2025-01-02T00:00:00Z``) or relative
+                                times (e.g., ``3 days ago``, ``1 week ago``).
+                                Useful for refetching recent runs that may have
+                                been rerun or updated.
+
 ``fetch-commit`` Command
 ------------------------
 

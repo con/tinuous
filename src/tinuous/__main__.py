@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import logging
 import os
 from pathlib import Path
@@ -9,6 +9,7 @@ from typing import Any, Optional
 
 import click
 from click_loglevel import LogLevel
+from dateutil.parser import isoparse
 from dotenv import load_dotenv
 from in_place import InPlace
 from yaml import safe_load
@@ -19,6 +20,60 @@ from .config import Config, GHPathsDict
 from .github import GitHubActions
 from .state import STATE_FILE, StateFile
 from .util import log
+
+
+def parse_since(value: str) -> datetime:
+    """
+    Parse a since value, which can be either:
+    - An ISO 8601 timestamp (e.g., "2025-01-02T00:00:00Z")
+    - A relative time expression (e.g., "3 days ago", "1 week ago")
+
+    Returns a timezone-aware datetime.
+    """
+    value = value.strip()
+
+    # Try relative time patterns first
+    relative_pattern = re.compile(
+        r"^(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago$", re.IGNORECASE
+    )
+    match = relative_pattern.match(value)
+    if match:
+        amount = int(match.group(1))
+        unit = match.group(2).lower()
+        now = datetime.now(timezone.utc)
+
+        if unit == "second":
+            return now - timedelta(seconds=amount)
+        elif unit == "minute":
+            return now - timedelta(minutes=amount)
+        elif unit == "hour":
+            return now - timedelta(hours=amount)
+        elif unit == "day":
+            return now - timedelta(days=amount)
+        elif unit == "week":
+            return now - timedelta(weeks=amount)
+        elif unit == "month":
+            # Approximate: 30 days per month
+            return now - timedelta(days=amount * 30)
+        elif unit == "year":
+            # Approximate: 365 days per year
+            return now - timedelta(days=amount * 365)
+
+    # Try ISO 8601 timestamp
+    try:
+        dt = isoparse(value)
+        if dt.tzinfo is None:
+            # Assume UTC if no timezone specified
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        pass
+
+    raise click.BadParameter(
+        f"Cannot parse '{value}' as a timestamp. "
+        "Use ISO 8601 format (e.g., '2025-01-02T00:00:00Z') "
+        "or relative time (e.g., '3 days ago')."
+    )
 
 
 @click.group()
@@ -78,8 +133,24 @@ def main(ctx: click.Context, config: str, log_level: int, env: Optional[str]) ->
     type=click.Path(dir_okay=False, writable=True),
     help=f"Store program state in the given file  [default: {STATE_FILE}]",
 )
+@click.option(
+    "--since",
+    "since_override",
+    type=str,
+    default=None,
+    help=(
+        "Override the 'since' timestamp to refetch builds after this time. "
+        "Accepts ISO 8601 timestamps (e.g., '2025-01-02T00:00:00Z') or "
+        "relative times (e.g., '3 days ago'). Overrides both state file and config."
+    ),
+)
 @click.pass_obj
-def fetch(config_file: str, state_path: Optional[str], sanitize_secrets: bool) -> None:
+def fetch(
+    config_file: str,
+    state_path: Optional[str],
+    sanitize_secrets: bool,
+    since_override: Optional[str],
+) -> None:
     """Download logs"""
     try:
         with open(config_file) as fp:
@@ -88,6 +159,11 @@ def fetch(config_file: str, state_path: Optional[str], sanitize_secrets: bool) -
         raise click.UsageError(f"Configuration file not found: {config_file}")
     if sanitize_secrets and not cfg.secrets:
         log.warning("--sanitize-secrets set but no secrets given in configuration")
+    # Parse --since override if provided
+    parsed_since_override: Optional[datetime] = None
+    if since_override is not None:
+        parsed_since_override = parse_since(since_override)
+        log.info("Using --since override: %s", parsed_since_override.isoformat())
     statefile = StateFile.from_file(state_path)
     # Fetch tokens early in order to catch failures early:
     tokens: dict[str, dict[str, str]] = {}
@@ -109,7 +185,10 @@ def fetch(config_file: str, state_path: Optional[str], sanitize_secrets: bool) -
             log.info("No paths configured for %s; skipping", name)
             continue
         log.info("Fetching resources from %s", name)
-        since = cfg.get_since(statefile.get_since(name))
+        if parsed_since_override is not None:
+            since = parsed_since_override
+        else:
+            since = cfg.get_since(statefile.get_since(name))
         ci = cicfg.get_system(
             repo=cfg.repo, since=since, until=cfg.until, tokens=tokens[name]
         )
