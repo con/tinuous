@@ -165,8 +165,6 @@ def test_ghpathsdict_gets_packages() -> None:
 
 def test_package_filtering() -> None:
     """Test package filtering with include/exclude."""
-    from tinuous.base import WorkflowSpec
-
     # Test with list of packages (converted to include)
     data = {
         "paths": {"packages": "{year}/{package_name}/"},
