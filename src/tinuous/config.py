@@ -84,10 +84,19 @@ class CIConfig(NoExtraModel, ABC):
 class GitHubConfig(CIConfig):
     paths: GHPathsDict = Field(default_factory=GHPathsDict)
     workflows: GHWorkflowSpec = Field(default_factory=GHWorkflowSpec)
+    packages: WorkflowSpec = Field(default_factory=WorkflowSpec)
 
     @field_validator("workflows", mode="before")
     @classmethod
     def _workflow_list(cls, v: Any) -> Any:
+        if isinstance(v, list):
+            return {"include": v}
+        else:
+            return v
+
+    @field_validator("packages", mode="before")
+    @classmethod
+    def _package_list(cls, v: Any) -> Any:
         if isinstance(v, list):
             return {"include": v}
         else:
@@ -110,6 +119,7 @@ class GitHubConfig(CIConfig):
             until=until,
             token=tokens["github"],
             workflow_spec=self.workflows,
+            package_spec=self.packages,
         )
 
 

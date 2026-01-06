@@ -20,12 +20,14 @@ from .base import (
     CISystem,
     EventType,
     GHWorkflowSpec,
+    WorkflowSpec,
 )
 from .util import expand_template, get_github_token, iterfiles, log, sanitize_pathname
 
 
 class GitHubActions(CISystem):
     workflow_spec: GHWorkflowSpec
+    package_spec: Optional["WorkflowSpec"] = None
     hash2pr: Dict[str, str] = Field(default_factory=dict)
 
     @staticmethod
@@ -305,6 +307,10 @@ class GitHubActions(CISystem):
         if self.until is not None:
             log.info("Skipping packages newer than %s", self.until)
         for pkg in self.get_packages():
+            # Filter packages based on package_spec
+            if self.package_spec and not self.package_spec.match(pkg.name):
+                log.debug("Skipping package %s (filtered out)", pkg.name)
+                continue
             log.info("Found package %s", pkg.name)
             for version in self.get_package_versions(pkg):
                 ts = version.updated_at

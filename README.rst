@@ -231,6 +231,33 @@ keys:
             When ``workflows`` is not specified, assets are retrieved for all
             workflows in the repository.
 
+        ``packages``
+            A specification of the packages for which to retrieve metadata
+            and manifests.  This can be either a list of package names or a
+            mapping containing the following fields:
+
+            ``include``
+                A list of packages to retrieve, given as either names or
+                (when ``regex`` is true) `Python regular expressions`_ to
+                match against package names.  If ``include`` is omitted, it
+                defaults to including all packages.
+
+            ``exclude``
+                A list of packages to not retrieve, given as either names or
+                (when ``regex`` is true) `Python regular expressions`_ to
+                match against package names.  If ``exclude`` is omitted, no
+                packages are excluded.  Packages that match both ``include``
+                and ``exclude`` are excluded.
+
+            ``regex``
+                A boolean.  If true (default false), the elements of the
+                ``include`` and ``exclude`` fields are treated as `Python
+                regular expressions`_ that are matched (unanchored) against
+                package names; if false, they are used as exact names
+
+            When ``packages`` is not specified, metadata and manifests are
+            retrieved for all packages in the repository.
+
     ``travis``
         Configuration for retrieving logs from Travis-CI.com.  Subfield:
 
@@ -414,6 +441,8 @@ A sample config file:
           - test_crippled.yml
           - test_extensions.yml
           - test_macos.yml
+        packages:
+          - tinuous-inception
       travis:
         paths:
           logs: '{build_prefix}/{number}/{job}.txt'

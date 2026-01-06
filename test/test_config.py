@@ -161,3 +161,39 @@ def test_ghpathsdict_gets_packages() -> None:
 
     paths_with_packages = GHPathsDict(packages="{year}/{package_name}/")
     assert paths_with_packages.gets_packages()
+
+
+def test_package_filtering() -> None:
+    """Test package filtering with include/exclude."""
+    from tinuous.base import WorkflowSpec
+
+    # Test with list of packages (converted to include)
+    data = {
+        "paths": {"packages": "{year}/{package_name}/"},
+        "packages": ["tinuous-inception", "nwb2bids"],
+    }
+    cfg = GitHubConfig.model_validate(data)
+    assert cfg.packages.match("tinuous-inception")
+    assert cfg.packages.match("nwb2bids")
+    assert not cfg.packages.match("other-package")
+
+    # Test with explicit include/exclude
+    data = {
+        "paths": {"packages": "{year}/{package_name}/"},
+        "packages": {
+            "include": ["tinuous-.*"],
+            "exclude": [".*-test"],
+            "regex": True,
+        },
+    }
+    cfg = GitHubConfig.model_validate(data)
+    assert cfg.packages.match("tinuous-inception")
+    assert cfg.packages.match("tinuous-prod")
+    assert not cfg.packages.match("tinuous-test")
+    assert not cfg.packages.match("other-package")
+
+    # Test default (include all)
+    data = {"paths": {"packages": "{year}/{package_name}/"}}
+    cfg = GitHubConfig.model_validate(data)
+    assert cfg.packages.match("any-package")
+    assert cfg.packages.match("tinuous-inception")
