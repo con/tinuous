@@ -1,0 +1,8 @@
+repo: con/tinuous-inception
+ci:
+  github:
+    paths:
+      packages: '{year}/{month}/{package_name}/{tag}/'
+    packages:
+      - tinuous-inception
+since: 2026-01-01T00:00:00Z
