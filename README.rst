@@ -197,9 +197,11 @@ keys:
                 A template string that will be instantiated for each package
                 version (from GitHub Container Registry) to produce the path
                 for the directory (relative to the current working directory)
-                under which the package version metadata will be saved as a
-                JSON file.  If this is not specified, no package metadata will
-                be saved.
+                under which the package version metadata and manifest will be
+                saved as JSON files.  For container packages, this includes
+                both the package metadata (tags, version info) and the
+                OCI/Docker manifest.  If this is not specified, no package
+                data will be saved.
 
         ``workflows``
             A specification of the workflows for which to retrieve assets.

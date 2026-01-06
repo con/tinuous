@@ -327,6 +327,9 @@ class GitHubActions(CISystem):
                     version_id=version.id,
                     version_name=version.name,
                     tags=tags,
+                    url=version.url,
+                    html_url=version.html_url,
+                    description=version.description,
                 )
 
 
@@ -575,9 +578,14 @@ class PackageMetadata(BaseModel):
 class PackageVersion(BaseModel):
     id: int
     name: str
+    url: Optional[str] = None
+    package_html_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    html_url: Optional[str] = None
     metadata: PackageMetadata
+    # Additional fields that may be present
+    description: Optional[str] = None
 
 
 class Package(BaseModel):
@@ -597,6 +605,9 @@ class GHPackageAsset(BaseModel, arbitrary_types_allowed=True):
     version_id: int
     version_name: str
     tags: List[str]
+    url: Optional[str] = None
+    html_url: Optional[str] = None
+    description: Optional[str] = None
 
     def path_fields(self) -> dict[str, Any]:
         utc_date = self.updated_at.astimezone(timezone.utc)
@@ -625,34 +636,123 @@ class GHPackageAsset(BaseModel, arbitrary_types_allowed=True):
         return expand_template(path_template, self.path_fields(), variables)
 
     def download(self, path: Path) -> list[Path]:
-        # For packages (containers), we store metadata instead of actual content
-        # since container images require docker/podman to pull
-        filename = f"{self.version_name}.json"
-        target = path / filename
-        if target.exists():
+        # For packages (containers), we download metadata and manifest
+        path.mkdir(parents=True, exist_ok=True)
+
+        # Save basic metadata
+        metadata_file = path / "metadata.json"
+        manifest_file = path / "manifest.json"
+
+        if metadata_file.exists() and manifest_file.exists():
             log.info(
-                "Metadata for package %s version %s already exists at %s; skipping",
+                "Package %s version %s already downloaded to %s; skipping",
                 self.package_name,
                 self.version_name,
-                target,
+                path,
             )
             return []
-        path.mkdir(parents=True, exist_ok=True)
-        log.info(
-            "Saving metadata for package %s version %s to %s",
-            self.package_name,
-            self.version_name,
-            target,
-        )
-        # Write metadata as JSON
-        metadata = {
-            "package_name": self.package_name,
-            "package_type": self.package_type,
-            "version_id": self.version_id,
-            "version_name": self.version_name,
-            "tags": self.tags,
-            "updated_at": self.updated_at.isoformat(),
-        }
-        with target.open("w", encoding="utf-8") as fp:
-            json.dump(metadata, fp, indent=2)
-        return [target]
+
+        downloaded_files = []
+
+        # Save basic metadata
+        if not metadata_file.exists():
+            log.info(
+                "Saving metadata for package %s version %s to %s",
+                self.package_name,
+                self.version_name,
+                metadata_file,
+            )
+            metadata = {
+                "package_name": self.package_name,
+                "package_type": self.package_type,
+                "version_id": self.version_id,
+                "version_name": self.version_name,
+                "tags": self.tags,
+                "updated_at": self.updated_at.isoformat(),
+                "url": self.url,
+                "html_url": self.html_url,
+                "description": self.description,
+            }
+            with metadata_file.open("w", encoding="utf-8") as fp:
+                json.dump(metadata, fp, indent=2)
+            downloaded_files.append(metadata_file)
+
+        # Download container manifest for GHCR
+        if self.package_type == "container" and not manifest_file.exists():
+            try:
+                log.info(
+                    "Downloading manifest for package %s version %s",
+                    self.package_name,
+                    self.version_name,
+                )
+                manifest = self._download_container_manifest()
+                if manifest:
+                    with manifest_file.open("w", encoding="utf-8") as fp:
+                        json.dump(manifest, fp, indent=2)
+                    downloaded_files.append(manifest_file)
+                    log.info("Saved manifest to %s", manifest_file)
+            except Exception as e:
+                log.warning(
+                    "Failed to download manifest for %s: %s",
+                    self.package_name,
+                    str(e),
+                )
+
+        return downloaded_files
+
+    def _download_container_manifest(self) -> Optional[dict[str, Any]]:
+        """Download the OCI/Docker manifest for a container package."""
+        # GHCR registry URL pattern: ghcr.io/<owner>/<package>:<tag>
+        # or @<digest>
+
+        # Extract owner from package name if it contains a slash
+        # Otherwise use the repo owner from the client
+        owner_val = self.package_name.split("/")[0]
+        owner = owner_val if "/" in self.package_name else None
+
+        # For GitHub Container Registry, use the registry API
+        # Manifest: ghcr.io/v2/<owner>/<image>/manifests/<tag_or_digest>
+
+        # Get the first tag or use the version_name (digest)
+        reference = self.tags[0] if self.tags else self.version_name
+
+        # Construct the manifest URL for GHCR
+        # Extract the owner from the API URL if available
+        if self.url:
+            # URL format: https://api.github.com/orgs/{owner}/packages/
+            #   container/{package}/versions/{id}
+            # or https://api.github.com/users/{owner}/packages/
+            #   container/{package}/versions/{id}
+            match = re.search(r'/(orgs|users)/([^/]+)/', self.url)
+            if match:
+                owner = match.group(2)
+
+        if not owner:
+            log.warning("Could not determine owner for manifest download")
+            return None
+
+        # Construct the GHCR manifest URL
+        base_url = f"https://ghcr.io/v2/{owner}/{self.package_name}"
+        manifest_url = f"{base_url}/manifests/{reference}"
+
+        try:
+            # Request the manifest with Accept header for OCI manifest
+            accept_header = (
+                "application/vnd.oci.image.manifest.v1+json, "
+                "application/vnd.docker.distribution.manifest.v2+json, "
+                "application/vnd.docker.distribution.manifest.list.v2+json"
+            )
+            headers = {"Accept": accept_header}
+
+            # Use the GitHub token for authentication with GHCR
+            # GHCR uses the GitHub token as a bearer token
+            r = self.client.get(manifest_url, headers=headers)
+            manifest: dict[str, Any] = r.json()
+            return manifest
+        except Exception as e:
+            log.debug(
+                "Failed to fetch manifest from %s: %s",
+                manifest_url,
+                str(e),
+            )
+            return None
