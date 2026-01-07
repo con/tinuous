@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from functools import cached_property
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -642,14 +643,14 @@ class GHPackageAsset(BaseModel, arbitrary_types_allowed=True):
         return expand_template(path_template, self.path_fields(), variables)
 
     def download(self, path: Path) -> list[Path]:
-        # For packages (containers), we download metadata and manifest
+        # For packages (containers), we download metadata, manifest, and layers
         path.mkdir(parents=True, exist_ok=True)
 
         # Save basic metadata
         metadata_file = path / "metadata.json"
-        manifest_file = path / "manifest.json"
+        oci_complete_marker = path / ".oci_complete"
 
-        if metadata_file.exists() and manifest_file.exists():
+        if oci_complete_marker.exists():
             log.info(
                 "Package %s version %s already downloaded to %s; skipping",
                 self.package_name,
@@ -683,28 +684,200 @@ class GHPackageAsset(BaseModel, arbitrary_types_allowed=True):
                 json.dump(metadata, fp, indent=2)
             downloaded_files.append(metadata_file)
 
-        # Download container manifest for GHCR
-        if self.package_type == "container" and not manifest_file.exists():
+        # Download container manifest and layers for GHCR
+        if self.package_type == "container":
             try:
                 log.info(
-                    "Downloading manifest for package %s version %s",
+                    "Downloading container image for package %s version %s",
                     self.package_name,
                     self.version_name,
                 )
-                manifest = self._download_container_manifest()
-                if manifest:
-                    with manifest_file.open("w", encoding="utf-8") as fp:
-                        json.dump(manifest, fp, indent=2)
-                    downloaded_files.append(manifest_file)
-                    log.info("Saved manifest to %s", manifest_file)
+                oci_files = self._download_container_image(path)
+                downloaded_files.extend(oci_files)
+
+                # Mark as complete
+                oci_complete_marker.touch()
+                downloaded_files.append(oci_complete_marker)
+
+                log.info("Container image downloaded to OCI layout at %s", path)
             except Exception as e:
                 log.warning(
-                    "Failed to download manifest for %s: %s",
+                    "Failed to download container image for %s: %s",
                     self.package_name,
                     str(e),
                 )
 
         return downloaded_files
+
+    def _download_container_image(self, base_path: Path) -> list[Path]:
+        """
+        Download the full container image in OCI layout format.
+
+        This creates a directory structure compatible with podman/skopeo:
+        - blobs/sha256/<digest> - Layer and config blobs
+        - index.json - OCI index pointing to manifest
+        - oci-layout - OCI layout version file
+        """
+        downloaded = []
+
+        # Get owner for GHCR access
+        owner = self._get_owner()
+        if not owner:
+            log.warning("Could not determine owner for container download")
+            return []
+
+        # Create OCI layout structure
+        blobs_dir = base_path / "blobs" / "sha256"
+        blobs_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write OCI layout version
+        oci_layout_file = base_path / "oci-layout"
+        if not oci_layout_file.exists():
+            with oci_layout_file.open("w") as f:
+                json.dump({"imageLayoutVersion": "1.0.0"}, f)
+            downloaded.append(oci_layout_file)
+
+        # Download manifest
+        manifest = self._download_container_manifest()
+        if not manifest:
+            return downloaded
+
+        # Determine manifest digest
+        manifest_bytes = json.dumps(
+            manifest, separators=(',', ':'), sort_keys=True
+        ).encode('utf-8')
+        manifest_digest = hashlib.sha256(manifest_bytes).hexdigest()
+
+        # Save manifest as blob
+        manifest_blob = blobs_dir / manifest_digest
+        if not manifest_blob.exists():
+            with manifest_blob.open("wb") as f:
+                f.write(manifest_bytes)
+            downloaded.append(manifest_blob)
+
+        # Download config blob if present
+        if "config" in manifest:
+            config_digest = manifest["config"]["digest"].split(":")[-1]
+            config_blob = blobs_dir / config_digest
+            if not config_blob.exists():
+                log.info("Downloading config blob %s", config_digest[:12])
+                self._download_blob(owner, config_digest, config_blob)
+                downloaded.append(config_blob)
+
+        # Download layer blobs
+        if "layers" in manifest:
+            for i, layer in enumerate(manifest["layers"]):
+                layer_digest = layer["digest"].split(":")[-1]
+                layer_blob = blobs_dir / layer_digest
+                if not layer_blob.exists():
+                    log.info(
+                        "Downloading layer %d/%d: %s",
+                        i + 1,
+                        len(manifest["layers"]),
+                        layer_digest[:12],
+                    )
+                    self._download_blob(
+                        owner, layer_digest, layer_blob
+                    )
+                    downloaded.append(layer_blob)
+
+        # Handle multi-platform manifests
+        if "manifests" in manifest:
+            log.info("Multi-platform manifest detected")
+            for sub_manifest in manifest["manifests"]:
+                sub_digest = sub_manifest["digest"].split(":")[-1]
+                sub_blob = blobs_dir / sub_digest
+                if not sub_blob.exists():
+                    # Download sub-manifest
+                    log.info("Downloading sub-manifest %s", sub_digest[:12])
+                    self._download_blob(
+                        owner, sub_digest, sub_blob
+                    )
+                    downloaded.append(sub_blob)
+
+                    # Parse and download layers from sub-manifest
+                    with sub_blob.open("rb") as f:
+                        sub_man = json.load(f)
+
+                    if "config" in sub_man:
+                        config_digest = sub_man["config"]["digest"].split(":")[-1]
+                        config_blob = blobs_dir / config_digest
+                        if not config_blob.exists():
+                            self._download_blob(
+                                owner, config_digest, config_blob
+                            )
+                            downloaded.append(config_blob)
+
+                    if "layers" in sub_man:
+                        for layer in sub_man["layers"]:
+                            layer_digest = layer["digest"].split(":")[-1]
+                            layer_blob = blobs_dir / layer_digest
+                            if not layer_blob.exists():
+                                self._download_blob(
+                                    owner, layer_digest, layer_blob
+                                )
+                                downloaded.append(layer_blob)
+
+        # Create index.json pointing to the manifest
+        index_file = base_path / "index.json"
+        if not index_file.exists():
+            manifest_entry: dict[str, Any] = {
+                "mediaType": manifest.get(
+                    "mediaType",
+                    "application/vnd.oci.image.manifest.v1+json"
+                ),
+                "digest": f"sha256:{manifest_digest}",
+                "size": len(manifest_bytes),
+            }
+            if self.tags:
+                manifest_entry["annotations"] = {
+                    "org.opencontainers.image.ref.name": self.tags[0]
+                }
+
+            index_data: dict[str, Any] = {
+                "schemaVersion": 2,
+                "manifests": [manifest_entry]
+            }
+
+            with index_file.open("w") as f:
+                json.dump(index_data, f, indent=2)
+            downloaded.append(index_file)
+
+        return downloaded
+
+    def _get_owner(self) -> Optional[str]:
+        """Extract owner from URL or package name."""
+        # Try to extract from URL first
+        if self.url:
+            match = re.search(r'/(orgs|users)/([^/]+)/', self.url)
+            if match:
+                return match.group(2)
+
+        # Try from package name if it contains a slash
+        if "/" in self.package_name:
+            return self.package_name.split("/")[0]
+
+        return None
+
+    def _download_blob(
+        self, owner: str, digest: str, target: Path
+    ) -> None:
+        """Download a blob from GHCR."""
+        blob_url = (
+            f"https://ghcr.io/v2/{owner}/{self.package_name}/"
+            f"blobs/sha256:{digest}"
+        )
+
+        try:
+            r = self.client.get(blob_url, stream=True)
+            r.raise_for_status()
+
+            with target.open("wb") as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+        except Exception as e:
+            log.error("Failed to download blob %s: %s", digest[:12], str(e))
+            raise
 
     def _download_container_manifest(self) -> Optional[dict[str, Any]]:
         """Download the OCI/Docker manifest for a container package."""

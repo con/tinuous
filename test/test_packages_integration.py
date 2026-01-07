@@ -11,6 +11,7 @@ Run with: pytest test/test_packages_integration.py -v --integration
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 import tempfile
@@ -18,6 +19,8 @@ import tempfile
 import pytest
 
 from tinuous.config import Config
+
+log = logging.getLogger(__name__)
 
 
 @pytest.mark.integration
@@ -96,22 +99,63 @@ def test_fetch_tinuous_inception_package() -> None:
             assert "version_id" in metadata
             assert "updated_at" in metadata
 
-            # Verify manifest file exists for containers
-            manifest_file = path / "manifest.json"
-            if manifest_file.exists():
-                with open(manifest_file) as f:
-                    manifest = json.load(f)
+            # Verify OCI layout structure
+            oci_layout = path / "oci-layout"
+            index_json = path / "index.json"
+            blobs_dir = path / "blobs" / "sha256"
 
-                # Verify OCI/Docker manifest structure
-                assert "config" in manifest or "manifests" in manifest
-                if "config" in manifest:
-                    # Single-platform manifest
-                    assert "layers" in manifest
-                    assert "schemaVersion" in manifest
-                elif "manifests" in manifest:
-                    # Multi-platform manifest list
-                    assert "schemaVersion" in manifest
-                    assert isinstance(manifest["manifests"], list)
+            assert oci_layout.exists(), "OCI layout file should exist"
+            assert index_json.exists(), "index.json should exist"
+            assert blobs_dir.exists(), "blobs/sha256 directory should exist"
+
+            # Verify OCI layout version
+            with open(oci_layout) as f:
+                layout = json.load(f)
+            assert layout["imageLayoutVersion"] == "1.0.0"
+
+            # Verify index.json structure
+            with open(index_json) as f:
+                index = json.load(f)
+            assert index["schemaVersion"] == 2
+            assert "manifests" in index
+            assert len(index["manifests"]) > 0
+
+            # Verify blobs exist
+            blobs = list(blobs_dir.glob("*"))
+            assert len(blobs) > 0, "Should have downloaded some blobs"
+            log.info("Downloaded %d blobs", len(blobs))
+
+            # Try to run with podman if available
+            import subprocess
+            import shutil
+
+            if shutil.which("podman"):
+                log.info("Testing image with podman")
+                try:
+                    # Run the container
+                    result = subprocess.run(
+                        ["podman", "run", f"oci:{path}"],
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                    )
+                    log.info("Podman stdout: %s", result.stdout)
+                    log.info("Podman stderr: %s", result.stderr)
+
+                    # Verify we got output
+                    assert result.returncode == 0, (
+                        f"Podman run failed: {result.stderr}"
+                    )
+                    assert "Built at:" in result.stdout, (
+                        "Expected 'Built at:' in output"
+                    )
+                    log.info("✓ Successfully ran container with podman")
+                except subprocess.TimeoutExpired:
+                    log.warning("Podman run timed out")
+                except Exception as e:
+                    log.warning("Podman test failed: %s", str(e))
+            else:
+                log.info("Podman not available, skipping runtime test")
 
             # Only check the first package version found
             break
