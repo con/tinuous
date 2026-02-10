@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from functools import cached_property
+import hashlib
+import json
 from pathlib import Path
 import re
 from typing import Any, Dict, List, Optional
@@ -19,12 +21,14 @@ from .base import (
     CISystem,
     EventType,
     GHWorkflowSpec,
+    WorkflowSpec,
 )
 from .util import expand_template, get_github_token, iterfiles, log, sanitize_pathname
 
 
 class GitHubActions(CISystem):
     workflow_spec: GHWorkflowSpec
+    package_spec: Optional["WorkflowSpec"] = None
     hash2pr: Dict[str, str] = Field(default_factory=dict)
 
     @staticmethod
@@ -264,6 +268,77 @@ class GitHubActions(CISystem):
                     download_url=asset.browser_download_url,
                 )
 
+    def get_packages(self) -> Iterator[Package]:
+        # First get the owner type (user or org) from the repo name
+        owner = self.repo.split("/")[0]
+        # Try organization packages first, fall back to user packages
+        for endpoint in [
+            f"/orgs/{owner}/packages",
+            f"/users/{owner}/packages",
+        ]:
+            try:
+                params = {"package_type": "container"}
+                for item in self.paginate(endpoint, params=params):
+                    yield Package.model_validate(item)
+                return  # Successfully fetched packages
+            except requests.HTTPError as e:
+                if e.response is not None and e.response.status_code == 404:
+                    continue  # Try next endpoint
+                raise
+
+    def get_package_versions(self, package: Package) -> Iterator[PackageVersion]:
+        owner = self.repo.split("/")[0]
+        # Try organization packages first, fall back to user packages
+        pkg_name = quote(package.name, safe="")
+        for endpoint_base in [
+            f"/orgs/{owner}/packages/container/{pkg_name}/versions",
+            f"/users/{owner}/packages/container/{pkg_name}/versions",
+        ]:
+            try:
+                for item in self.paginate(endpoint_base):
+                    yield PackageVersion.model_validate(item)
+                return  # Successfully fetched versions
+            except requests.HTTPError as e:
+                if e.response is not None and e.response.status_code == 404:
+                    continue  # Try next endpoint
+                raise
+
+    def get_package_assets(self) -> Iterator[GHPackageAsset]:
+        log.info("Fetching packages newer than %s", self.since)
+        if self.until is not None:
+            log.info("Skipping packages newer than %s", self.until)
+        for pkg in self.get_packages():
+            # Filter packages based on package_spec
+            if self.package_spec and not self.package_spec.match(pkg.name):
+                log.debug("Skipping package %s (filtered out)", pkg.name)
+                continue
+            log.info("Found package %s", pkg.name)
+            for version in self.get_package_versions(pkg):
+                ts = version.updated_at
+                if ts <= self.since or (self.until is not None and ts > self.until):
+                    continue
+                self.register_build(ts, True)
+                tags = version.metadata.container.tags
+                tags_str = ", ".join(tags) if tags else "(no tags)"
+                log.info(
+                    "Found package version %s (tags: %s) for %s",
+                    version.name,
+                    tags_str,
+                    pkg.name,
+                )
+                yield GHPackageAsset(
+                    client=self.client,
+                    updated_at=ts,
+                    package_name=pkg.name,
+                    package_type=pkg.package_type,
+                    version_id=version.id,
+                    version_name=version.name,
+                    tags=tags,
+                    url=version.url,
+                    html_url=version.html_url,
+                    description=version.description,
+                )
+
 
 class GHAAsset(BuildAsset):
     workflow_name: str
@@ -497,3 +572,366 @@ class Release(BaseModel):
     created_at: datetime
     published_at: Optional[datetime] = None
     assets: List[ReleaseAsset]
+
+
+class ContainerMetadata(BaseModel):
+    tags: List[str]
+
+
+class PackageMetadata(BaseModel):
+    container: ContainerMetadata
+
+
+class PackageVersion(BaseModel):
+    id: int
+    name: str
+    url: Optional[str] = None
+    package_html_url: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    html_url: Optional[str] = None
+    metadata: PackageMetadata
+    # Additional fields that may be present
+    description: Optional[str] = None
+
+
+class Package(BaseModel):
+    id: int
+    name: str
+    package_type: str
+    created_at: datetime
+    updated_at: datetime
+
+
+# The `arbitrary_types_allowed` is for APIClient
+class GHPackageAsset(BaseModel, arbitrary_types_allowed=True):
+    client: APIClient
+    updated_at: datetime
+    package_name: str
+    package_type: str
+    version_id: int
+    version_name: str
+    tags: List[str]
+    url: Optional[str] = None
+    html_url: Optional[str] = None
+    description: Optional[str] = None
+
+    def path_fields(self) -> dict[str, Any]:
+        utc_date = self.updated_at.astimezone(timezone.utc)
+        # Use the first tag as primary tag, or version_name if no tags
+        primary_tag = self.tags[0] if self.tags else self.version_name
+        return {
+            "timestamp": utc_date,
+            "timestamp_local": self.updated_at.astimezone(),
+            "year": utc_date.strftime("%Y"),
+            "month": utc_date.strftime("%m"),
+            "day": utc_date.strftime("%d"),
+            "hour": utc_date.strftime("%H"),
+            "minute": utc_date.strftime("%M"),
+            "second": utc_date.strftime("%S"),
+            "ci": "github",
+            "type": "package",
+            "package_name": sanitize_pathname(self.package_name),
+            "package_type": self.package_type,
+            "version_id": str(self.version_id),
+            "version_name": sanitize_pathname(self.version_name),
+            "tag": sanitize_pathname(primary_tag),
+            "tags": ",".join(sanitize_pathname(t) for t in self.tags),
+        }
+
+    def expand_path(self, path_template: str, variables: dict[str, str]) -> str:
+        return expand_template(path_template, self.path_fields(), variables)
+
+    def download(self, path: Path) -> list[Path]:
+        # For packages (containers), we download metadata, manifest, and layers
+        path.mkdir(parents=True, exist_ok=True)
+
+        # Save basic metadata
+        metadata_file = path / "metadata.json"
+        oci_complete_marker = path / ".oci_complete"
+
+        if oci_complete_marker.exists():
+            log.info(
+                "Package %s version %s already downloaded to %s; skipping",
+                self.package_name,
+                self.version_name,
+                path,
+            )
+            return []
+
+        downloaded_files = []
+
+        # Save basic metadata
+        if not metadata_file.exists():
+            log.info(
+                "Saving metadata for package %s version %s to %s",
+                self.package_name,
+                self.version_name,
+                metadata_file,
+            )
+            metadata = {
+                "package_name": self.package_name,
+                "package_type": self.package_type,
+                "version_id": self.version_id,
+                "version_name": self.version_name,
+                "tags": self.tags,
+                "updated_at": self.updated_at.isoformat(),
+                "url": self.url,
+                "html_url": self.html_url,
+                "description": self.description,
+            }
+            with metadata_file.open("w", encoding="utf-8") as fp:
+                json.dump(metadata, fp, indent=2)
+            downloaded_files.append(metadata_file)
+
+        # Download container manifest and layers for GHCR
+        if self.package_type == "container":
+            try:
+                log.info(
+                    "Downloading container image for package %s version %s",
+                    self.package_name,
+                    self.version_name,
+                )
+                oci_files = self._download_container_image(path)
+                downloaded_files.extend(oci_files)
+
+                # Mark as complete
+                oci_complete_marker.touch()
+                downloaded_files.append(oci_complete_marker)
+
+                log.info("Container image downloaded to OCI layout at %s", path)
+            except Exception as e:
+                log.warning(
+                    "Failed to download container image for %s: %s",
+                    self.package_name,
+                    str(e),
+                )
+
+        return downloaded_files
+
+    def _download_container_image(self, base_path: Path) -> list[Path]:
+        """
+        Download the full container image in OCI layout format.
+
+        This creates a directory structure compatible with podman/skopeo:
+        - blobs/sha256/<digest> - Layer and config blobs
+        - index.json - OCI index pointing to manifest
+        - oci-layout - OCI layout version file
+        """
+        downloaded = []
+
+        # Get owner for GHCR access
+        owner = self._get_owner()
+        if not owner:
+            log.warning("Could not determine owner for container download")
+            return []
+
+        # Create OCI layout structure
+        blobs_dir = base_path / "blobs" / "sha256"
+        blobs_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write OCI layout version
+        oci_layout_file = base_path / "oci-layout"
+        if not oci_layout_file.exists():
+            with oci_layout_file.open("w") as f:
+                json.dump({"imageLayoutVersion": "1.0.0"}, f)
+            downloaded.append(oci_layout_file)
+
+        # Download manifest
+        manifest = self._download_container_manifest()
+        if not manifest:
+            return downloaded
+
+        # Determine manifest digest
+        manifest_bytes = json.dumps(
+            manifest, separators=(',', ':'), sort_keys=True
+        ).encode('utf-8')
+        manifest_digest = hashlib.sha256(manifest_bytes).hexdigest()
+
+        # Save manifest as blob
+        manifest_blob = blobs_dir / manifest_digest
+        if not manifest_blob.exists():
+            with manifest_blob.open("wb") as f:
+                f.write(manifest_bytes)
+            downloaded.append(manifest_blob)
+
+        # Download config blob if present
+        if "config" in manifest:
+            config_digest = manifest["config"]["digest"].split(":")[-1]
+            config_blob = blobs_dir / config_digest
+            if not config_blob.exists():
+                log.info("Downloading config blob %s", config_digest[:12])
+                self._download_blob(owner, config_digest, config_blob)
+                downloaded.append(config_blob)
+
+        # Download layer blobs
+        if "layers" in manifest:
+            for i, layer in enumerate(manifest["layers"]):
+                layer_digest = layer["digest"].split(":")[-1]
+                layer_blob = blobs_dir / layer_digest
+                if not layer_blob.exists():
+                    log.info(
+                        "Downloading layer %d/%d: %s",
+                        i + 1,
+                        len(manifest["layers"]),
+                        layer_digest[:12],
+                    )
+                    self._download_blob(
+                        owner, layer_digest, layer_blob
+                    )
+                    downloaded.append(layer_blob)
+
+        # Handle multi-platform manifests
+        if "manifests" in manifest:
+            log.info("Multi-platform manifest detected")
+            for sub_manifest in manifest["manifests"]:
+                sub_digest = sub_manifest["digest"].split(":")[-1]
+                sub_blob = blobs_dir / sub_digest
+                if not sub_blob.exists():
+                    # Download sub-manifest
+                    log.info("Downloading sub-manifest %s", sub_digest[:12])
+                    self._download_blob(
+                        owner, sub_digest, sub_blob
+                    )
+                    downloaded.append(sub_blob)
+
+                    # Parse and download layers from sub-manifest
+                    with sub_blob.open("rb") as f:
+                        sub_man = json.load(f)
+
+                    if "config" in sub_man:
+                        config_digest = sub_man["config"]["digest"].split(":")[-1]
+                        config_blob = blobs_dir / config_digest
+                        if not config_blob.exists():
+                            self._download_blob(
+                                owner, config_digest, config_blob
+                            )
+                            downloaded.append(config_blob)
+
+                    if "layers" in sub_man:
+                        for layer in sub_man["layers"]:
+                            layer_digest = layer["digest"].split(":")[-1]
+                            layer_blob = blobs_dir / layer_digest
+                            if not layer_blob.exists():
+                                self._download_blob(
+                                    owner, layer_digest, layer_blob
+                                )
+                                downloaded.append(layer_blob)
+
+        # Create index.json pointing to the manifest
+        index_file = base_path / "index.json"
+        if not index_file.exists():
+            manifest_entry: dict[str, Any] = {
+                "mediaType": manifest.get(
+                    "mediaType",
+                    "application/vnd.oci.image.manifest.v1+json"
+                ),
+                "digest": f"sha256:{manifest_digest}",
+                "size": len(manifest_bytes),
+            }
+            if self.tags:
+                manifest_entry["annotations"] = {
+                    "org.opencontainers.image.ref.name": self.tags[0]
+                }
+
+            index_data: dict[str, Any] = {
+                "schemaVersion": 2,
+                "manifests": [manifest_entry]
+            }
+
+            with index_file.open("w") as f:
+                json.dump(index_data, f, indent=2)
+            downloaded.append(index_file)
+
+        return downloaded
+
+    def _get_owner(self) -> Optional[str]:
+        """Extract owner from URL or package name."""
+        # Try to extract from URL first
+        if self.url:
+            match = re.search(r'/(orgs|users)/([^/]+)/', self.url)
+            if match:
+                return match.group(2)
+
+        # Try from package name if it contains a slash
+        if "/" in self.package_name:
+            return self.package_name.split("/")[0]
+
+        return None
+
+    def _download_blob(
+        self, owner: str, digest: str, target: Path
+    ) -> None:
+        """Download a blob from GHCR."""
+        blob_url = (
+            f"https://ghcr.io/v2/{owner}/{self.package_name}/"
+            f"blobs/sha256:{digest}"
+        )
+
+        try:
+            r = self.client.get(blob_url, stream=True)
+            r.raise_for_status()
+
+            with target.open("wb") as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+        except Exception as e:
+            log.error("Failed to download blob %s: %s", digest[:12], str(e))
+            raise
+
+    def _download_container_manifest(self) -> Optional[dict[str, Any]]:
+        """Download the OCI/Docker manifest for a container package."""
+        # GHCR registry URL pattern: ghcr.io/<owner>/<package>:<tag>
+        # or @<digest>
+
+        # Extract owner from package name if it contains a slash
+        # Otherwise use the repo owner from the client
+        owner_val = self.package_name.split("/")[0]
+        owner = owner_val if "/" in self.package_name else None
+
+        # For GitHub Container Registry, use the registry API
+        # Manifest: ghcr.io/v2/<owner>/<image>/manifests/<tag_or_digest>
+
+        # Get the first tag or use the version_name (digest)
+        reference = self.tags[0] if self.tags else self.version_name
+
+        # Construct the manifest URL for GHCR
+        # Extract the owner from the API URL if available
+        if self.url:
+            # URL format: https://api.github.com/orgs/{owner}/packages/
+            #   container/{package}/versions/{id}
+            # or https://api.github.com/users/{owner}/packages/
+            #   container/{package}/versions/{id}
+            match = re.search(r'/(orgs|users)/([^/]+)/', self.url)
+            if match:
+                owner = match.group(2)
+
+        if not owner:
+            log.warning("Could not determine owner for manifest download")
+            return None
+
+        # Construct the GHCR manifest URL
+        base_url = f"https://ghcr.io/v2/{owner}/{self.package_name}"
+        manifest_url = f"{base_url}/manifests/{reference}"
+
+        try:
+            # Request the manifest with Accept header for OCI manifest
+            accept_header = (
+                "application/vnd.oci.image.manifest.v1+json, "
+                "application/vnd.docker.distribution.manifest.v2+json, "
+                "application/vnd.docker.distribution.manifest.list.v2+json"
+            )
+            headers = {"Accept": accept_header}
+
+            # Use the GitHub token for authentication with GHCR
+            # GHCR uses the GitHub token as a bearer token
+            r = self.client.get(manifest_url, headers=headers)
+            manifest: dict[str, Any] = r.json()
+            return manifest
+        except Exception as e:
+            log.debug(
+                "Failed to fetch manifest from %s: %s",
+                manifest_url,
+                str(e),
+            )
+            return None
