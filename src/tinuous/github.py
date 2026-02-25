@@ -102,6 +102,12 @@ class GitHubActions(CISystem):
         log.info("Fetching runs newer than %s", self.since)
         if self.until is not None:
             log.info("Skipping runs newer than %s", self.until)
+
+        # Collect all runs first, grouped by (head_sha, event) to identify PRs
+        # with incomplete workflows
+        runs_by_commit: dict[str, list[tuple[Workflow, WorkflowRun]]] = {}
+        incomplete_commits: set[str] = set()
+
         for wf in self.get_workflows():
             log.info("Fetching runs for workflow %s (%s)", wf.path, wf.name)
             for run in self.get_runs(wf, self.since):
@@ -109,6 +115,14 @@ class GitHubActions(CISystem):
                 ts = run.created_at
                 if self.until is not None and ts > self.until:
                     log.info("Run %s is too new; skipping", run.run_number)
+                    continue
+                # For PR events, group by head_sha to track incomplete PRs
+                if run_event is EventType.PULL_REQUEST:
+                    if run.head_sha not in runs_by_commit:
+                        runs_by_commit[run.head_sha] = []
+                    runs_by_commit[run.head_sha].append((wf, run))
+                    if run.status != "completed":
+                        incomplete_commits.add(run.head_sha)
                 elif run.status != "completed":
                     log.info("Run %s not completed; skipping", run.run_number)
                     self.register_build(ts, False)
@@ -135,6 +149,46 @@ class GitHubActions(CISystem):
                     else:
                         log.info("Event type is %r; skipping", run.event)
 
+        # Process PR runs, skipping commits where any workflow is still running
+        if EventType.PULL_REQUEST in event_types:
+            for head_sha, runs in runs_by_commit.items():
+                if head_sha in incomplete_commits:
+                    log.info(
+                        "PR commit %s has incomplete workflows; skipping all runs",
+                        head_sha[:7],
+                    )
+                    for _wf, run in runs:
+                        self.register_build(run.created_at, False)
+                    continue
+                for wf, run in runs:
+                    log.info("Found PR run %s", run.run_number)
+                    self.register_build(run.created_at, True)
+                    event_id = self.get_event_id(run, EventType.PULL_REQUEST)
+                    if logs:
+                        yield GHABuildLog.from_workflow_run(
+                            self.client, wf, run, EventType.PULL_REQUEST, event_id
+                        )
+                    if artifacts:
+                        for name, download_url in self.get_artifacts(run):
+                            yield GHAArtifact.from_workflow_run(
+                                self.client,
+                                wf,
+                                run,
+                                EventType.PULL_REQUEST,
+                                event_id,
+                                name,
+                                download_url,
+                            )
+        else:
+            # Still register PR builds even if not fetching PR events
+            for head_sha, runs in runs_by_commit.items():
+                if head_sha in incomplete_commits:
+                    for _wf, run in runs:
+                        self.register_build(run.created_at, False)
+                else:
+                    for _wf, run in runs:
+                        self.register_build(run.created_at, True)
+
     def get_build_assets_for_commit(
         self, committish: str, event_types: list[EventType], logs: bool, artifacts: bool
     ) -> Iterator[BuildAsset]:
@@ -146,33 +200,46 @@ class GitHubActions(CISystem):
             log.info("Expanded committish %r to full sha %s", committish, committish2)
             committish = committish2
         log.info("Fetching runs for commit %s", committish)
+
+        # Collect all runs first to check if any workflow is still running
+        all_runs: list[tuple[Workflow, WorkflowRun]] = []
+        has_incomplete = False
+
         for wf in self.get_workflows():
             log.info("Fetching runs for workflow %s (%s)", wf.path, wf.name)
             for run in self.get_runs_for_head(wf, committish):
+                all_runs.append((wf, run))
                 if run.status != "completed":
-                    log.info("Run %s not completed; skipping", run.run_number)
-                    continue
-                log.info("Found run %s", run.run_number)
-                run_event = EventType.from_gh_event(run.event)
-                if run_event in event_types:
-                    event_id = self.get_event_id(run, run_event)
-                    if logs:
-                        yield GHABuildLog.from_workflow_run(
-                            self.client, wf, run, run_event, event_id
+                    has_incomplete = True
+
+        if has_incomplete:
+            log.info(
+                "Commit %s has incomplete workflows; skipping all runs", committish[:7]
+            )
+            return
+
+        for wf, run in all_runs:
+            log.info("Found run %s", run.run_number)
+            run_event = EventType.from_gh_event(run.event)
+            if run_event in event_types:
+                event_id = self.get_event_id(run, run_event)
+                if logs:
+                    yield GHABuildLog.from_workflow_run(
+                        self.client, wf, run, run_event, event_id
+                    )
+                if artifacts:
+                    for name, download_url in self.get_artifacts(run):
+                        yield GHAArtifact.from_workflow_run(
+                            self.client,
+                            wf,
+                            run,
+                            run_event,
+                            event_id,
+                            name,
+                            download_url,
                         )
-                    if artifacts:
-                        for name, download_url in self.get_artifacts(run):
-                            yield GHAArtifact.from_workflow_run(
-                                self.client,
-                                wf,
-                                run,
-                                run_event,
-                                event_id,
-                                name,
-                                download_url,
-                            )
-                else:
-                    log.info("Event type is %r; skipping", run.event)
+            else:
+                log.info("Event type is %r; skipping", run.event)
 
     def get_event_id(self, run: WorkflowRun, event_type: EventType) -> str:
         if event_type in (EventType.CRON, EventType.MANUAL):
