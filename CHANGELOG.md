@@ -1,3 +1,20 @@
+# 0.7.3 (Sat Apr 25 2026)
+
+#### 🐛 Bug Fix
+
+- Add --since option to fetch command for refetching recent runs [#225](https://github.com/con/tinuous/pull/225) ([@yarikoptic](https://github.com/yarikoptic))
+
+#### 🏠 Internal
+
+- [gh-actions](deps): Bump actions/setup-python from 5 to 6 [#218](https://github.com/con/tinuous/pull/218) ([@dependabot[bot]](https://github.com/dependabot[bot]))
+
+#### Authors: 2
+
+- [@dependabot[bot]](https://github.com/dependabot[bot])
+- Yaroslav Halchenko ([@yarikoptic](https://github.com/yarikoptic))
+
+---
+
 # 0.7.2 (Tue Sep 02 2025)
 
 #### 🐛 Bug Fix
