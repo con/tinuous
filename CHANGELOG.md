@@ -1,3 +1,15 @@
+# 0.7.4 (Sat Apr 25 2026)
+
+#### 🏠 Internal
+
+- [gh-actions](deps): Bump codecov/codecov-action from 5 to 6 [#226](https://github.com/con/tinuous/pull/226) ([@dependabot[bot]](https://github.com/dependabot[bot]))
+
+#### Authors: 1
+
+- [@dependabot[bot]](https://github.com/dependabot[bot])
+
+---
+
 # 0.7.3 (Sat Apr 25 2026)
 
 #### 🐛 Bug Fix
