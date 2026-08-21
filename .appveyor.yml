@@ -10,6 +10,8 @@ environment:
       TOXENV: py
     - PY: '3.13'
       TOXENV: py
+    - PY: '3.14'
+      TOXENV: py
     - PY: '3.10'
       TOXENV: lint
     - PY: '3.10'
