@@ -3,11 +3,13 @@ from __future__ import annotations
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from functools import cached_property
+import json
 from pathlib import Path
 import re
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
+from oras.provider import Registry
 from pydantic import BaseModel, Field
 import requests
 
@@ -19,12 +21,15 @@ from .base import (
     CISystem,
     EventType,
     GHWorkflowSpec,
+    PackageSpec,
 )
+from .ghcr import GHCR_HOSTNAME, OCILayout, download_image, get_registry
 from .util import expand_template, get_github_token, iterfiles, log, sanitize_pathname
 
 
 class GitHubActions(CISystem):
     workflow_spec: GHWorkflowSpec
+    package_spec: PackageSpec = Field(default_factory=PackageSpec)
     hash2pr: Dict[str, str] = Field(default_factory=dict)
 
     @staticmethod
@@ -264,6 +269,95 @@ class GitHubActions(CISystem):
                     download_url=asset.browser_download_url,
                 )
 
+    @cached_property
+    def registry(self) -> Registry:
+        return get_registry(GHCR_HOSTNAME, self.token)
+
+    def get_packages(self) -> Iterator[Package]:
+        """
+        List the owner's container packages.  GitHub only exposes packages per
+        owner, so unless ``owner_wide`` is set, those belonging to other
+        repositories are filtered out here.
+        """
+        owner = self.repo.partition("/")[0]
+        params = {"package_type": "container"}
+        # An organization and a user are different endpoints, and there is no
+        # way to tell which one an owner is without asking.
+        for endpoint in [f"/orgs/{owner}/packages", f"/users/{owner}/packages"]:
+            try:
+                packages = list(self.paginate(endpoint, params=params))
+            except requests.HTTPError as e:
+                if e.response is not None and e.response.status_code == 404:
+                    continue
+                if e.response is not None and e.response.status_code == 403:
+                    raise RuntimeError(
+                        f"Access to {endpoint} was denied; a token with the"
+                        " 'read:packages' scope is needed in order to fetch"
+                        " GitHub Packages"
+                    ) from e
+                raise
+            for item in packages:
+                pkg = Package.model_validate(item)
+                if not self.package_spec.owner_wide and pkg.repo_name != self.repo:
+                    log.debug(
+                        "Package %s belongs to %s, not %s; skipping",
+                        pkg.name,
+                        pkg.repo_name,
+                        self.repo,
+                    )
+                    continue
+                yield pkg
+            return
+        log.info("No packages found for %s", owner)
+
+    def get_package_versions(self, package: Package) -> Iterator[PackageVersion]:
+        # The package name goes in a path segment and can itself contain
+        # slashes (e.g. "example-notebooks/000409-ibl"), so it has to be
+        # encoded.
+        name = quote(package.name, safe="")
+        endpoint = f"{package.owner_endpoint}/packages/container/{name}/versions"
+        for item in self.paginate(endpoint):
+            yield PackageVersion.model_validate(item)
+
+    def get_package_assets(self) -> Iterator[GHPackageAsset]:
+        log.info("Fetching package versions newer than %s", self.since)
+        if self.until is not None:
+            log.info("Skipping package versions newer than %s", self.until)
+        for pkg in self.get_packages():
+            if not self.package_spec.match(pkg.name):
+                log.debug("Package %s excluded by config; skipping", pkg.name)
+                continue
+            log.info("Found package %s", pkg.name)
+            for version in self.get_package_versions(pkg):
+                ts = version.updated_at
+                if ts <= self.since or (self.until is not None and ts > self.until):
+                    continue
+                if not version.tags and not self.package_spec.untagged:
+                    log.debug(
+                        "Version %s of package %s is untagged; skipping",
+                        version.name,
+                        pkg.name,
+                    )
+                    continue
+                self.register_build(ts, True)
+                log.info(
+                    "Found version %s of package %s (tags: %s)",
+                    version.name,
+                    pkg.name,
+                    ", ".join(version.tags) if version.tags else "<none>",
+                )
+                yield GHPackageAsset(
+                    registry=self.registry,
+                    owner=pkg.owner,
+                    package_name=pkg.name,
+                    package_type=pkg.package_type,
+                    version_id=version.id,
+                    digest=version.name,
+                    tags=version.tags,
+                    updated_at=ts,
+                    html_url=version.html_url,
+                )
+
 
 class GHAAsset(BuildAsset):
     workflow_name: str
@@ -497,3 +591,152 @@ class Release(BaseModel):
     created_at: datetime
     published_at: Optional[datetime] = None
     assets: List[ReleaseAsset]
+
+
+class PackageRepository(BaseModel):
+    full_name: str
+
+
+class Package(BaseModel):
+    id: int
+    name: str
+    package_type: str
+    created_at: datetime
+    updated_at: datetime
+    url: str
+    repository: Optional[PackageRepository] = None
+
+    @property
+    def repo_name(self) -> Optional[str]:
+        """The ``owner/name`` of the repository the package is linked to"""
+        return self.repository.full_name if self.repository is not None else None
+
+    @property
+    def owner_endpoint(self) -> str:
+        """
+        The ``/orgs/{owner}`` or ``/users/{owner}`` prefix under which this
+        package is served, taken from the URL the API itself reported.
+        """
+        m = re.search(r"/(?:orgs|users)/[^/]+", self.url)
+        if m is None:
+            raise ValueError(f"Cannot determine owner endpoint from {self.url!r}")
+        return m.group()
+
+    @property
+    def owner(self) -> str:
+        return self.owner_endpoint.rpartition("/")[2]
+
+
+class ContainerMetadata(BaseModel):
+    tags: List[str] = Field(default_factory=list)
+
+
+class PackageVersionMetadata(BaseModel):
+    package_type: str
+    container: Optional[ContainerMetadata] = None
+
+
+class PackageVersion(BaseModel):
+    id: int
+    #: For container packages this is the manifest digest, not a tag
+    name: str
+    url: str
+    created_at: datetime
+    updated_at: datetime
+    html_url: Optional[str] = None
+    metadata: Optional[PackageVersionMetadata] = None
+
+    @property
+    def tags(self) -> List[str]:
+        if self.metadata is None or self.metadata.container is None:
+            return []
+        return self.metadata.container.tags
+
+
+# The `arbitrary_types_allowed` is for Registry
+class GHPackageAsset(BaseModel, arbitrary_types_allowed=True):
+    registry: Registry
+    owner: str
+    package_name: str
+    package_type: str
+    version_id: int
+    digest: str
+    tags: List[str]
+    updated_at: datetime
+    html_url: Optional[str] = None
+
+    @property
+    def image(self) -> str:
+        """
+        The image to pull, referenced by digest.  Tags move, and one could move
+        between listing the version and downloading it; the digest is what the
+        version actually is.
+        """
+        return f"{self.registry.hostname}/{self.owner}/{self.package_name}@{self.digest}"
+
+    @property
+    def tag(self) -> Optional[str]:
+        return self.tags[0] if self.tags else None
+
+    def path_fields(self) -> dict[str, Any]:
+        utc_date = self.updated_at.astimezone(timezone.utc)
+        return {
+            "timestamp": utc_date,
+            "timestamp_local": self.updated_at.astimezone(),
+            "year": utc_date.strftime("%Y"),
+            "month": utc_date.strftime("%m"),
+            "day": utc_date.strftime("%d"),
+            "hour": utc_date.strftime("%H"),
+            "minute": utc_date.strftime("%M"),
+            "second": utc_date.strftime("%S"),
+            "ci": "github",
+            "type": "package",
+            "package_name": sanitize_pathname(self.package_name),
+            "package_type": self.package_type,
+            "version_id": str(self.version_id),
+            "digest": sanitize_pathname(self.digest),
+            "tag": sanitize_pathname(self.tag if self.tag is not None else self.digest),
+            "tags": ",".join(sanitize_pathname(t) for t in self.tags),
+        }
+
+    def expand_path(self, path_template: str, variables: dict[str, str]) -> str:
+        return expand_template(path_template, self.path_fields(), variables)
+
+    def metadata(self) -> dict[str, Any]:
+        return {
+            "package_name": self.package_name,
+            "package_type": self.package_type,
+            "version_id": self.version_id,
+            "digest": self.digest,
+            "tags": self.tags,
+            "updated_at": self.updated_at.isoformat(),
+            "image": self.image,
+            "html_url": self.html_url,
+        }
+
+    def download(self, path: Path) -> list[Path]:
+        layout = OCILayout(path)
+        if layout.is_complete():
+            if layout.index_digest() == self.digest:
+                log.info(
+                    "Version %s of package %s already downloaded to %s; skipping",
+                    self.digest,
+                    self.package_name,
+                    path,
+                )
+                return []
+            # This happens when the path template is keyed on something mutable
+            # like `{tag}` and the tag has since been moved to a new version.
+            log.info(
+                "%s holds a different version of package %s; replacing it with %s",
+                path,
+                self.package_name,
+                self.digest,
+            )
+        log.info("Downloading %s to %s", self.image, path)
+        path.mkdir(parents=True, exist_ok=True)
+        download_image(self.registry, self.image, path, tag=self.tag)
+        with (path / "package.json").open("w", encoding="utf-8") as fp:
+            json.dump(self.metadata(), fp, indent=2)
+            print(file=fp)
+        return list(layout.iterfiles())

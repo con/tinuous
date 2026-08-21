@@ -327,3 +327,21 @@ class WorkflowSpec(NoExtraModel):
 class GHWorkflowSpec(WorkflowSpec):
     def match(self, wf_path: str) -> bool:
         return super().match(PurePosixPath(wf_path).name)
+
+
+class PackageSpec(WorkflowSpec):
+    """
+    Which GitHub Packages to fetch.  `include`/`exclude`/`regex` are matched
+    against package names exactly as for workflows.
+    """
+
+    #: The GitHub API only lists packages per owner, not per repository.  By
+    #: default only those belonging to the configured repository are fetched;
+    #: set this to true to fetch every matching package owned by the same user
+    #: or organization.
+    owner_wide: bool = False
+
+    #: Whether to fetch package versions that have no tags.  These are mostly
+    #: intermediate `buildx` manifests and build attestations rather than
+    #: images anyone published, and there tend to be a great many of them.
+    untagged: bool = False
