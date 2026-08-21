@@ -202,6 +202,19 @@ keys:
                 under which the release's assets will be saved.  If this is not
                 specified, no release assets will be downloaded.
 
+            ``packages``
+                A template string that will be instantiated for each version of
+                each GitHub Package to produce the path for the directory
+                (relative to the current working directory) under which the
+                container image for that version will be saved, in `OCI image
+                layout`_ format.  If this is not specified, no packages will be
+                downloaded.
+
+                Only container packages (i.e. images in the GitHub Container
+                Registry) are supported.  Downloading them requires a GitHub
+                token with the ``read:packages`` scope; the ``GITHUB_TOKEN``
+                that GitHub Actions provides to a workflow does not have it.
+
         ``workflows``
             A specification of the workflows for which to retrieve assets.
             This can be either a list of workflow basenames, including the file
@@ -229,6 +242,48 @@ keys:
 
             When ``workflows`` is not specified, assets are retrieved for all
             workflows in the repository.
+
+        ``packages``
+            A specification of the GitHub Packages for which to retrieve
+            images.  This can be either a list of package names or a mapping
+            containing the following fields:
+
+            ``include``
+                A list of packages to retrieve, given as either names or (when
+                ``regex`` is true) `Python regular expressions`_ to match
+                against package names.  If ``include`` is omitted, it defaults
+                to including all packages.
+
+            ``exclude``
+                A list of packages to not retrieve, given as either names or
+                (when ``regex`` is true) `Python regular expressions`_ to match
+                against package names.  If ``exclude`` is omitted, no packages
+                are excluded.  Packages that match both ``include`` and
+                ``exclude`` are excluded.
+
+            ``regex``
+                A boolean.  If true (default false), the elements of the
+                ``include`` and ``exclude`` fields are treated as `Python
+                regular expressions`_ that are matched (unanchored) against
+                package names; if false, they are used as exact names.
+
+            ``owner_wide``
+                A boolean.  GitHub only lists packages per user or
+                organization, not per repository, and a package need not belong
+                to any repository at all.  By default only those packages that
+                belong to the repository being backed up are retrieved; set
+                this to true (default false) to retrieve every matching package
+                owned by the same user or organization.
+
+            ``untagged``
+                A boolean.  If false (the default), package versions that have
+                no tags are skipped.  These are mostly intermediate ``buildx``
+                manifests, build cache, and attestations rather than images
+                that anyone published, and there tend to be a great many of
+                them.
+
+            When ``packages`` is not specified, images are retrieved for all
+            tagged versions of all of the repository's packages.
 
     ``travis``
         Configuration for retrieving logs from Travis-CI.com.  Subfield:
@@ -392,6 +447,8 @@ keys:
     .. _DataLad: https://www.datalad.org
 
 .. _Python regular expressions: https://docs.python.org/3/library/re.html
+.. _OCI image layout:
+   https://github.com/opencontainers/image-spec/blob/main/image-layout.md
                                 #regular-expression-syntax
 
 A sample config file:
@@ -408,10 +465,13 @@ A sample config file:
           logs: '{build_prefix}/{wf_name}/{number}/logs/'
           artifacts: '{build_prefix}/{wf_name}/{number}/artifacts/'
           releases: '{path_prefix}/{release_tag}/'
+          packages: '{path_prefix}/packages/{package_name}/{digest}/'
         workflows:
           - test_crippled.yml
           - test_extensions.yml
           - test_macos.yml
+        packages:
+          - tinuous-inception
       travis:
         paths:
           logs: '{build_prefix}/{number}/{job}.txt'
@@ -436,6 +496,36 @@ A sample config file:
     datalad:
       enabled: true
       cfg_proc: text2git
+
+
+GitHub Packages
+---------------
+
+Each version of a container package is saved as an `OCI image layout`_
+directory, which ``podman`` and ``skopeo`` read directly::
+
+    $ podman run oci:2026/08/github/packages/tinuous-inception/sha256%3a530a02.../
+    Built at: 2026-01-06 20:30:58 UTC
+
+    $ skopeo copy oci:<path> docker://ghcr.io/con/tinuous-inception:restored
+
+The directory holds the standard ``oci-layout`` and ``index.json`` files and a
+``blobs/`` tree containing the manifest, the config, and every layer, plus a
+``package.json`` written by tinuous recording the package name, the version ID,
+its tags, and the image reference it came from.  Manifests are stored exactly
+as the registry served them, so the archived digests are the upstream digests
+and can be checked against them.
+
+``index.json`` is written only once every blob is present, so an interrupted
+download leaves behind a directory that is not mistaken for a complete image
+and is resumed on the next run.  Images are fetched by digest rather than by
+tag, and a version already on disk is not downloaded again.
+
+Multi-platform images are saved whole: the image index, every platform's
+manifest, and all of their layers.  Note that a single such image can run to
+several hundred megabytes, and that all versions of a package share most of
+their layers -- if the paths are inside a DataLad dataset, git-annex will store
+each layer once no matter how many versions refer to it.
 
 
 Path Templates
@@ -476,8 +566,8 @@ Placeholder             Definition
 ``{ci}``                The name of the CI system (``github``, ``travis``,
                         ``appveyor``, or ``circleci``)
 ``{type}``              The event type that triggered the build (``cron``,
-                        ``manual``, ``pr``, or ``push``), or ``release`` for
-                        GitHub releases
+                        ``manual``, ``pr``, or ``push``), ``release`` for
+                        GitHub releases, or ``package`` for GitHub Packages
 ``{type_id}``           Further information on the triggering event; for
                         ``cron`` and ``manual``, this is a timestamp for the
                         start of the build; for ``pr``, this is the number of
@@ -528,6 +618,18 @@ Placeholder             Definition
 ``{step_name}``         *(CircleCI only)* The escaped [1]_ name of the step [2]_
 ``{index}``             *(CircleCI only)* The index of the parallel container
                         that the step ran on [2]_
+``{package_name}``      The escaped [1]_ name of the package [3]_
+``{package_type}``      The type of the package (always ``container``) [3]_
+``{version_id}``        The unique ID of the package version [3]_
+``{digest}``            The escaped [1]_ digest of the package version's
+                        manifest, e.g. ``sha256%3a26af75a3...`` [3]_
+``{tag}``               The escaped [1]_ first tag of the package version, or
+                        ``{digest}`` if it has none.  Note that a tag such as
+                        ``latest`` moves from one version to the next, so a
+                        path keyed on it holds only the most recent version to
+                        have carried it [3]_
+``{tags}``              A comma-separated list of the escaped [1]_ tags of the
+                        package version [3]_
 ======================  =======================================================
 
 .. _datetime: https://docs.python.org/3/library/datetime.html#datetime-objects
@@ -538,7 +640,9 @@ Placeholder             Definition
        replacing each whitespace character with a space.
 
 .. [2] These placeholders are only available for ``path`` and
-       ``artifacts_path``, not ``releases_path``
+       ``artifacts_path``, not ``releases_path`` or ``packages``
+
+.. [3] These placeholders are only available for ``packages``
 
 A placeholder's value may be truncated to the first ``n`` characters by writing
 ``{placeholder[:n]}``, e.g., ``{commit[:7]}``.

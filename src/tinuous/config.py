@@ -9,7 +9,14 @@ from typing import Any, Dict, List, Optional, Pattern
 from pydantic import Field, field_validator
 
 from .appveyor import Appveyor
-from .base import CISystem, EventType, GHWorkflowSpec, NoExtraModel, WorkflowSpec
+from .base import (
+    CISystem,
+    EventType,
+    GHWorkflowSpec,
+    NoExtraModel,
+    PackageSpec,
+    WorkflowSpec,
+)
 from .circleci import CircleCI
 from .github import GitHubActions
 from .travis import Travis
@@ -25,10 +32,14 @@ class PathsDict(NoExtraModel):
     def gets_releases(self) -> bool:
         return False
 
+    def gets_packages(self) -> bool:
+        return False
+
 
 class GHPathsDict(PathsDict):
     artifacts: Optional[str] = None
     releases: Optional[str] = None
+    packages: Optional[str] = None
 
     def gets_builds(self) -> bool:
         # <https://github.com/pydantic/pydantic/issues/8052>
@@ -36,6 +47,9 @@ class GHPathsDict(PathsDict):
 
     def gets_releases(self) -> bool:
         return self.releases is not None
+
+    def gets_packages(self) -> bool:
+        return self.packages is not None
 
 
 class CCIPathsDict(PathsDict):
@@ -70,14 +84,26 @@ class CIConfig(NoExtraModel, ABC):
     def gets_releases(self) -> bool:
         return self.paths.gets_releases()
 
+    def gets_packages(self) -> bool:
+        return self.paths.gets_packages()
+
 
 class GitHubConfig(CIConfig):
     paths: GHPathsDict = Field(default_factory=GHPathsDict)
     workflows: GHWorkflowSpec = Field(default_factory=GHWorkflowSpec)
+    packages: PackageSpec = Field(default_factory=PackageSpec)
 
     @field_validator("workflows", mode="before")
     @classmethod
     def _workflow_list(cls, v: Any) -> Any:
+        if isinstance(v, list):
+            return {"include": v}
+        else:
+            return v
+
+    @field_validator("packages", mode="before")
+    @classmethod
+    def _package_list(cls, v: Any) -> Any:
         if isinstance(v, list):
             return {"include": v}
         else:
@@ -100,6 +126,7 @@ class GitHubConfig(CIConfig):
             until=until,
             token=tokens["github"],
             workflow_spec=self.workflows,
+            package_spec=self.packages,
         )
 
 

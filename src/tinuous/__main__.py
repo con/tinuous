@@ -180,8 +180,13 @@ def fetch(
     logs_added = 0
     artifacts_added = 0
     relassets_added = 0
+    packages_added = 0
     for name, cicfg in cfg.ci.items():
-        if not cicfg.gets_builds() and not cicfg.gets_releases():
+        if (
+            not cicfg.gets_builds()
+            and not cicfg.gets_releases()
+            and not cicfg.gets_packages()
+        ):
             log.info("No paths configured for %s; skipping", name)
             continue
         log.info("Fetching resources from %s", name)
@@ -228,17 +233,31 @@ def fetch(
                     ensure_datalad(ds, path, cfg.datalad.cfg_proc)
                 paths = asset.download(Path(path))
                 relassets_added += len(paths)
+        if cicfg.gets_packages():
+            assert isinstance(ci, GitHubActions)
+            assert isinstance(cicfg.paths, GHPathsDict)
+            packages_path = cicfg.paths.packages
+            assert packages_path is not None
+            for pkgasset in ci.get_package_assets():
+                path = pkgasset.expand_path(packages_path, cfg.vars)
+                if cfg.datalad.enabled:
+                    ensure_datalad(ds, path, cfg.datalad.cfg_proc)
+                if pkgasset.download(Path(path)):
+                    packages_added += 1
         statefile.set_since(name, ci.new_since())
     log.info("%d logs downloaded", logs_added)
     log.info("%d artifacts downloaded", artifacts_added)
     log.info("%d release assets downloaded", relassets_added)
+    log.info("%d package versions downloaded", packages_added)
     if cfg.datalad.enabled:
-        if logs_added or artifacts_added or relassets_added:
+        if logs_added or artifacts_added or relassets_added or packages_added:
             msg = f"[tinuous] {logs_added} logs added"
             if artifacts_added:
                 msg += f", {artifacts_added} artifacts added"
             if relassets_added:
                 msg += f", {relassets_added} release assets added"
+            if packages_added:
+                msg += f", {packages_added} package versions added"
             msg += f"\n\nProduced by tinuous {__version__}"
             ds.save(recursive=True, message=msg)
         elif statefile.modified:
