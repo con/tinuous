@@ -2,8 +2,6 @@ image: Ubuntu
 
 environment:
   matrix:
-    - PY: '3.9'
-      TOXENV: py
     - PY: '3.10'
       TOXENV: py
     - PY: '3.11'
