@@ -2,8 +2,6 @@ image: Ubuntu
 
 environment:
   matrix:
-    - PY: '3.9'
-      TOXENV: py
     - PY: '3.10'
       TOXENV: py
     - PY: '3.11'
@@ -11,6 +9,8 @@ environment:
     - PY: '3.12'
       TOXENV: py
     - PY: '3.13'
+      TOXENV: py
+    - PY: '3.14'
       TOXENV: py
     - PY: '3.10'
       TOXENV: lint
