@@ -1,3 +1,23 @@
+# 0.7.5 (Fri Aug 21 2026)
+
+#### 🐛 Bug Fix
+
+- Merge Dependabot bumps, fix CI, test on 3.14 and drop 3.9 [#233](https://github.com/con/tinuous/pull/233) ([@dependabot[bot]](https://github.com/dependabot[bot]) [@claude](https://github.com/claude) [@yarikoptic](https://github.com/yarikoptic))
+
+#### 🏠 Internal
+
+- Merge dependabot PR #231: bump actions/setup-python from 6 to 7 [#231](https://github.com/con/tinuous/pull/231) ([@claude](https://github.com/claude))
+- Merge dependabot PR #230: bump actions/checkout from 4 to 7 [#230](https://github.com/con/tinuous/pull/230) ([@claude](https://github.com/claude))
+- [gh-actions](deps): Bump codecov/codecov-action from 6 to 7 [#229](https://github.com/con/tinuous/pull/229) ([@dependabot[bot]](https://github.com/dependabot[bot]))
+
+#### Authors: 3
+
+- [@dependabot[bot]](https://github.com/dependabot[bot])
+- Claude ([@claude](https://github.com/claude))
+- Yaroslav Halchenko ([@yarikoptic](https://github.com/yarikoptic))
+
+---
+
 # 0.7.4 (Sat Apr 25 2026)
 
 #### 🏠 Internal
