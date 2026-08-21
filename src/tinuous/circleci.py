@@ -59,8 +59,7 @@ class CircleCI(CISystem):
             yield from data["items"]
             # The API is documented as always returning "next_page_token", but
             # it has been observed to omit the field on the last page.
-            next_page_token = data.get("next_page_token")
-            if next_page_token is None:
+            if (next_page_token := data.get("next_page_token")) is None:
                 break
             if params is None:
                 params = {}
