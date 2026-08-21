@@ -35,7 +35,17 @@ OCI_INDEX = "application/vnd.oci.image.index.v1+json"
 OCI_CONFIG = "application/vnd.oci.image.config.v1+json"
 OCI_LAYER = "application/vnd.oci.image.layer.v1.tar+gzip"
 
-BUSYBOX = Path("/bin/busybox")
+#: A static shell makes the test images actually runnable, which is what the
+#: podman tests need.  Everything else only cares about the bytes, so the
+#: layers fall back to a plain file when there is no busybox to be had.
+BUSYBOX = next(
+    (
+        Path(p)
+        for p in ["/bin/busybox", "/usr/bin/busybox", shutil.which("busybox") or ""]
+        if p and Path(p).is_file()
+    ),
+    None,
+)
 
 
 def digest_of(data: bytes) -> str:
@@ -55,34 +65,39 @@ def canonical(obj: Any) -> bytes:
     return json.dumps(obj, indent=3).encode("utf-8")
 
 
-def make_layer(message: str) -> tuple[bytes, str]:
+def add_file(tf: tarfile.TarFile, name: str, content: bytes, mode: int) -> None:
+    info = tarfile.TarInfo(name)
+    info.size = len(content)
+    info.mode = mode
+    tf.addfile(info, io.BytesIO(content))
+
+
+def make_layer(message: str, runnable: bool = False) -> tuple[bytes, str]:
     """
-    Build a gzipped layer tarball holding a static busybox and a script that
-    prints ``message``.  Returns the compressed bytes and the uncompressed
-    digest (the "diff id" that goes into the image config).
+    Build a gzipped layer tarball whose entrypoint prints ``message``.  Returns
+    the compressed bytes and the uncompressed digest (the "diff id" that goes
+    into the image config).
+
+    With ``runnable``, a static busybox is included so that a container runtime
+    can actually execute it; without, the layer is just enough bytes to be a
+    layer.
     """
     raw = io.BytesIO()
     with tarfile.open(fileobj=raw, mode="w") as tf:
-        for name in ("bin", "usr", "usr/bin"):
+        for name in ("bin",):
             info = tarfile.TarInfo(name)
             info.type = tarfile.DIRTYPE
             info.mode = 0o755
             tf.addfile(info)
-        payload = BUSYBOX.read_bytes()
-        info = tarfile.TarInfo("bin/busybox")
-        info.size = len(payload)
-        info.mode = 0o755
-        tf.addfile(info, io.BytesIO(payload))
-        for applet in ("bin/sh", "bin/echo"):
-            link = tarfile.TarInfo(applet)
-            link.type = tarfile.SYMTYPE
-            link.linkname = "/bin/busybox"
-            tf.addfile(link)
-        script = f"#!/bin/sh\necho '{message}'\n".encode()
-        info = tarfile.TarInfo("hello.sh")
-        info.size = len(script)
-        info.mode = 0o755
-        tf.addfile(info, io.BytesIO(script))
+        if runnable:
+            assert BUSYBOX is not None
+            add_file(tf, "bin/busybox", BUSYBOX.read_bytes(), 0o755)
+            for applet in ("bin/sh", "bin/echo"):
+                link = tarfile.TarInfo(applet)
+                link.type = tarfile.SYMTYPE
+                link.linkname = "/bin/busybox"
+                tf.addfile(link)
+        add_file(tf, "hello.sh", f"#!/bin/sh\necho '{message}'\n".encode(), 0o755)
     uncompressed = raw.getvalue()
     compressed = gzip.compress(uncompressed, mtime=0)
     return compressed, digest_of(uncompressed)
@@ -103,9 +118,14 @@ class Image:
         return desc
 
     def add_manifest(
-        self, message: str, architecture: str, *, oci: bool = False
+        self,
+        message: str,
+        architecture: str,
+        *,
+        oci: bool = False,
+        runnable: bool = False,
     ) -> dict[str, Any]:
-        layer, diff_id = make_layer(message)
+        layer, diff_id = make_layer(message, runnable=runnable)
         layer_desc = self.add(OCI_LAYER if oci else DOCKER_LAYER, layer)
         config = canonical(
             {
@@ -140,17 +160,24 @@ class Image:
         self.tags[name] = digest
 
 
-def build_images(architecture: str = "amd64") -> dict[str, Image]:
+def build_images(
+    architecture: str = "amd64", runnable: bool = False
+) -> dict[str, Image]:
     """
     Two images: a single-platform one (as `docker push` produces) and a
     multi-platform one (as `docker buildx --platform` produces).  Both use
     Docker media types, which is what GHCR serves in practice.
     """
     single = Image()
-    single.tag("latest", single.add_manifest("Built at: single", architecture)["digest"])
+    single.tag(
+        "latest",
+        single.add_manifest("Built at: single", architecture, runnable=runnable)[
+            "digest"
+        ],
+    )
 
     multi = Image()
-    native = multi.add_manifest("Built at: multi", architecture)
+    native = multi.add_manifest("Built at: multi", architecture, runnable=runnable)
     other = multi.add_manifest("Built at: multi", "s390x")
     index = multi.add_index([native, other])
     multi.tag("latest", index)
@@ -160,7 +187,10 @@ def build_images(architecture: str = "amd64") -> dict[str, Image]:
     # named "example-notebooks/<dandiset>" -- so exercise a nested name too.
     nested = Image()
     nested.tag(
-        "latest", nested.add_manifest("Built at: nested", architecture)["digest"]
+        "latest",
+        nested.add_manifest("Built at: nested", architecture, runnable=runnable)[
+            "digest"
+        ],
     )
     return {
         "testorg/single": single,
@@ -182,7 +212,7 @@ class Handler(BaseHTTPRequestHandler):
     requests: list[str]
     require_auth: bool
 
-    def log_message(self, format: str, *args: Any) -> None:
+    def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
         pass
 
     def _challenge(self, scope: str) -> None:
@@ -295,7 +325,7 @@ class FakeRegistry:
 
 
 def have_busybox() -> bool:
-    return BUSYBOX.is_file()
+    return BUSYBOX is not None
 
 
 def have_podman() -> bool:

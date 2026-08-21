@@ -24,14 +24,17 @@ from tinuous.ghcr import (
     get_registry,
 )
 
-pytestmark = pytest.mark.skipif(
-    not have_busybox(), reason="/bin/busybox is needed to build test images"
-)
-
 
 @pytest.fixture(scope="module")
 def registry() -> Iterator[FakeRegistry]:
     with FakeRegistry() as reg:
+        yield reg
+
+
+@pytest.fixture(scope="module")
+def runnable_registry() -> Iterator[FakeRegistry]:
+    """A registry whose images have a shell in them, for the podman tests"""
+    with FakeRegistry(build_images(runnable=True)) as reg:
         yield reg
 
 
@@ -214,6 +217,7 @@ def test_malformed_digest_rejected(tmp_path: Path, digest: str) -> None:
 
 
 @pytest.mark.skipif(not have_podman(), reason="podman is not installed")
+@pytest.mark.skipif(not have_busybox(), reason="a static busybox is needed")
 @pytest.mark.parametrize(
     "name,expected",
     [
@@ -223,7 +227,7 @@ def test_malformed_digest_rejected(tmp_path: Path, digest: str) -> None:
     ],
 )
 def test_podman_can_run_the_layout(
-    registry: FakeRegistry, tmp_path: Path, name: str, expected: str
+    runnable_registry: FakeRegistry, tmp_path: Path, name: str, expected: str
 ) -> None:
     """
     The point of the exercise: hand the layout to podman and get the image to
@@ -231,7 +235,7 @@ def test_podman_can_run_the_layout(
     upset it.
     """
     dest = tmp_path / name.replace("/", "_")
-    pull(registry, name, dest)
+    pull(runnable_registry, name, dest)
     (dest / "package.json").write_text('{"package_name": "test"}\n')
     r = subprocess.run(
         [shutil.which("podman") or "podman", "run", "--rm", f"oci:{dest}"],
@@ -290,6 +294,6 @@ def test_unusable_credentials_are_rejected(
     dest = tmp_path / "denied"
     with FakeRegistry(require_auth=True) as reg:
         client = get_registry(reg.hostname, token=token, insecure=True)
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError, match="Cannot respond to request"):
             download_image(client, reg.image_ref("testorg/single"), dest)
     assert not OCILayout(dest).is_complete()

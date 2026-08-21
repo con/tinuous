@@ -65,9 +65,12 @@ class DigestMismatch(Exception):
     """Raised when downloaded content does not hash to its expected digest"""
 
     def __init__(self, expected: str, actual: str) -> None:
-        super().__init__(f"Expected content with digest {expected}, got {actual}")
+        super().__init__(expected, actual)
         self.expected = expected
         self.actual = actual
+
+    def __str__(self) -> str:
+        return f"Expected content with digest {self.expected}, got {self.actual}"
 
 
 def get_registry(

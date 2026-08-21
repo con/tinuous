@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any, Optional
 
-from fake_registry import FakeRegistry, have_busybox
+from fake_registry import FakeRegistry
 import pytest
 import requests
 from yaml import safe_load
@@ -48,13 +48,15 @@ PACKAGES = [
 
 
 def version(
-    id: int, tags: list[str], updated: str = "2026-08-20T00:00:00Z"
+    version_id: int, tags: list[str], updated: str = "2026-08-20T00:00:00Z"
 ) -> dict[str, Any]:
     return {
-        "id": id,
-        "name": f"sha256:{id:064x}",
-        "url": f"{ORG}/packages/container/dandi-api/versions/{id}",
-        "html_url": f"https://github.com/dandi/dandi-archive/pkgs/container/x/{id}",
+        "id": version_id,
+        "name": f"sha256:{version_id:064x}",
+        "url": f"{ORG}/packages/container/dandi-api/versions/{version_id}",
+        "html_url": (
+            f"https://github.com/dandi/dandi-archive/pkgs/container/x/{version_id}"
+        ),
         "created_at": updated,
         "updated_at": updated,
         "metadata": {"package_type": "container", "container": {"tags": tags}},
@@ -88,12 +90,14 @@ def make_ci(
         self: GitHubActions, path: str, params: Optional[dict] = None
     ) -> Any:
         if path.endswith("/packages"):
+            assert params == {"package_type": "container"}
             if path.startswith("/orgs/") and org_status != 200:
                 raise http_error(org_status, path)
             if path.startswith("/users/"):
                 raise http_error(404, path)
             return iter(PACKAGES)
         assert "/versions" in path
+        assert params is None
         return iter(VERSIONS)
 
     monkeypatch.setattr(GitHubActions, "paginate", paginate)
@@ -223,7 +227,6 @@ def test_asset_path_untagged_falls_back_to_digest() -> None:
     assert asset.expand_path("{tag}", {}) == "sha256%3a" + "ab" * 32
 
 
-@pytest.mark.skipif(not have_busybox(), reason="/bin/busybox is needed")
 def test_asset_download_and_reuse(tmp_path: Path) -> None:
     with FakeRegistry() as reg:
         client = get_registry(reg.hostname, insecure=True)

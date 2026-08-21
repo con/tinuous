@@ -672,7 +672,10 @@ class GHPackageAsset(BaseModel, arbitrary_types_allowed=True):
         between listing the version and downloading it; the digest is what the
         version actually is.
         """
-        return f"{self.registry.hostname}/{self.owner}/{self.package_name}@{self.digest}"
+        return (
+            f"{self.registry.hostname}/{self.owner}"
+            f"/{self.package_name}@{self.digest}"
+        )
 
     @property
     def tag(self) -> Optional[str]:
