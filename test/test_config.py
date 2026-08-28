@@ -135,7 +135,63 @@ from tinuous.config import GHPathsDict, GitHubConfig
                 ),
             ),
         ),
+        (
+            {
+                "paths": {
+                    "packages": "{year}/{package_name}/{tag}/",
+                },
+            },
+            GitHubConfig(
+                paths=GHPathsDict(packages="{year}/{package_name}/{tag}/"),
+                workflows=GHWorkflowSpec(
+                    regex=False, include=[re.compile(r".*")], exclude=[]
+                ),
+            ),
+        ),
     ],
 )
 def test_parse_github_config(data: dict[str, Any], cfg: GitHubConfig) -> None:
     assert GitHubConfig.model_validate(data) == cfg
+
+
+def test_ghpathsdict_gets_packages() -> None:
+    """Test gets_packages method for GHPathsDict."""
+    paths_without_packages = GHPathsDict(logs="logs/")
+    assert not paths_without_packages.gets_packages()
+
+    paths_with_packages = GHPathsDict(packages="{year}/{package_name}/")
+    assert paths_with_packages.gets_packages()
+
+
+def test_package_filtering() -> None:
+    """Test package filtering with include/exclude."""
+    # Test with list of packages (converted to include)
+    data = {
+        "paths": {"packages": "{year}/{package_name}/"},
+        "packages": ["tinuous-inception", "nwb2bids"],
+    }
+    cfg = GitHubConfig.model_validate(data)
+    assert cfg.packages.match("tinuous-inception")
+    assert cfg.packages.match("nwb2bids")
+    assert not cfg.packages.match("other-package")
+
+    # Test with explicit include/exclude
+    data = {
+        "paths": {"packages": "{year}/{package_name}/"},
+        "packages": {
+            "include": ["tinuous-.*"],
+            "exclude": [".*-test"],
+            "regex": True,
+        },
+    }
+    cfg = GitHubConfig.model_validate(data)
+    assert cfg.packages.match("tinuous-inception")
+    assert cfg.packages.match("tinuous-prod")
+    assert not cfg.packages.match("tinuous-test")
+    assert not cfg.packages.match("other-package")
+
+    # Test default (include all)
+    data = {"paths": {"packages": "{year}/{package_name}/"}}
+    cfg = GitHubConfig.model_validate(data)
+    assert cfg.packages.match("any-package")
+    assert cfg.packages.match("tinuous-inception")
