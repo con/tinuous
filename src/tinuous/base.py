@@ -43,6 +43,32 @@ USER_AGENT = "tinuous/{} ({}) requests/{} {}/{}".format(
     platform.python_version(),
 )
 
+#: Number of bytes from the start of a partial/invalid download to include in
+#: diagnostic log output.
+PARTIAL_PREVIEW_BYTES = 512
+
+
+def format_partial_preview(data: bytes) -> str:
+    """Render a short, human-readable preview of partial download bytes.
+
+    Tries UTF-8 first so JSON/HTML stub responses are legible; falls back to
+    ``repr(bytes)`` (with ``\\xNN`` escapes) for binary payloads.
+    """
+    if not data:
+        return "<empty>"
+    try:
+        return repr(data.decode("utf-8"))
+    except UnicodeDecodeError:
+        return repr(data)
+
+
+def _read_preview(filepath: Path) -> bytes:
+    try:
+        with filepath.open("rb") as fp:
+            return fp.read(PARTIAL_PREVIEW_BYTES)
+    except OSError:
+        return b""
+
 
 class CommonStatus(Enum):
     SUCCESS = "success"
@@ -165,17 +191,29 @@ class APIClient:
         i = 0
         while True:
             try:
+                r: requests.Response | None = None
+                bytes_written = 0
                 try:
                     r = self.get(path, stream=True, headers=headers)
                     with filepath.open("wb") as fp:
                         for chunk in r.iter_content(chunk_size=8192):
                             fp.write(chunk)
+                            bytes_written += len(chunk)
                 except (ChunkedEncodingError, ReqConError) as e:
                     if i < self.MAX_RETRIES:
+                        resp_headers = dict(r.headers) if r is not None else None
+                        preview = format_partial_preview(_read_preview(filepath))
                         log.warning(
-                            "Download of %s interrupted: %s; waiting & retrying",
+                            "Download of %s interrupted after %d bytes: %s;"
+                            " response headers: %s;"
+                            " partial preview (first %d bytes): %s;"
+                            " waiting & retrying",
                             path,
+                            bytes_written,
                             str(e),
+                            resp_headers,
+                            PARTIAL_PREVIEW_BYTES,
+                            preview,
                         )
                         i += 1
                         sleep(i)
@@ -200,11 +238,26 @@ class APIClient:
                     zf.extractall(target_dir)
             except BadZipFile:
                 rmtree(target_dir)
+                size = zippath.stat().st_size if zippath.exists() else 0
+                preview = format_partial_preview(_read_preview(zippath))
                 if i < self.ZIPFILE_RETRIES:
-                    log.error("Invalid zip file retrieved; waiting and retrying")
+                    log.error(
+                        "Invalid zip file retrieved (%d bytes); "
+                        "preview (first %d bytes): %s; waiting and retrying",
+                        size,
+                        PARTIAL_PREVIEW_BYTES,
+                        preview,
+                    )
                     i += 1
                     sleep(i * i)
                 else:
+                    log.error(
+                        "Invalid zip file retrieved (%d bytes); "
+                        "preview (first %d bytes): %s",
+                        size,
+                        PARTIAL_PREVIEW_BYTES,
+                        preview,
+                    )
                     raise
             except BaseException:
                 rmtree(target_dir)
