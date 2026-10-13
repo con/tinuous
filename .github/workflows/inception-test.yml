@@ -60,6 +60,9 @@ jobs:
         working-directory: tinuous-inception
 
       - name: Run tinuous on tinuous
+        if: >-
+          github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository
         run: coverage run --source tinuous --branch -m tinuous fetch
         working-directory: tinuous-inception
         env:
@@ -70,12 +73,18 @@ jobs:
           PYTHONWARNINGS: error
 
       - name: Coverage report
+        if: >-
+          github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository
         run: |
           coverage report --precision 2 --show-missing
           coverage xml
         working-directory: tinuous-inception
 
       - name: Upload coverage to Codecov
+        if: >-
+          github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository
         uses: codecov/codecov-action@v7
         with:
           files: tinuous-inception/coverage.xml

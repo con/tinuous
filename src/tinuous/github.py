@@ -46,8 +46,9 @@ class GitHubActions(CISystem):
     def paginate(
         self, path: str, params: Optional[dict[str, str]] = None
     ) -> Iterator[dict]:
-        while path is not None:
-            r = self.client.get(path, params=params)
+        next_path: Optional[str] = path
+        while next_path is not None:
+            r = self.client.get(next_path, params=params)
             data = r.json()
             if isinstance(data, list):
                 yield from data
@@ -56,10 +57,10 @@ class GitHubActions(CISystem):
                 itemses = [v for k, v in data.items() if k != "total_count"]
                 if len(itemses) != 1:
                     raise ValueError(
-                        f"Unique non-count key not found in {path} response"
+                        f"Unique non-count key not found in {next_path} response"
                     )
                 yield from itemses[0]
-            path = r.links.get("next", {}).get("url")
+            next_path = r.links.get("next", {}).get("url")
             params = None
 
     def get_workflows(self) -> Iterator[Workflow]:
